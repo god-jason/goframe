@@ -7,13 +7,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // CORS 创建跨域中间件。生产环境禁止任意 Origin；Cookie credentials 模式
 // 不允许通配 Origin。CORS 不作为身份认证和资源授权机制。
-func CORS(cfg config.CORSConfig) (gin.HandlerFunc, error) {
+func CORS(cfg CORSConfig) (gin.HandlerFunc, error) {
 	if !cfg.Enabled {
 		return func(c *gin.Context) { c.Next() }, nil
 	}

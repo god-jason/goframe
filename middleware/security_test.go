@@ -7,12 +7,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/god-jason/goframe/config"
 )
 
 func TestSecurityHeaders(t *testing.T) {
-	headers := config.HeadersConfig{
+	headers := HeadersConfig{
 		Enabled:    true,
 		HSTS:       true,
 		HSTSMaxAge: time.Hour,
@@ -58,7 +56,7 @@ func TestMethodFilterBlocksTraceAndUnlistedMethods(t *testing.T) {
 }
 
 func TestRequestLimits(t *testing.T) {
-	cfg := config.RequestSecurityConfig{
+	cfg := RequestConfig{
 		MaxBodySize:     10,
 		MaxQueryLength:  8,
 		RequireJSONBody: true,
@@ -91,7 +89,7 @@ func TestRequestLimits(t *testing.T) {
 }
 
 func TestCORSAllowedOriginAndPreflight(t *testing.T) {
-	cfg := config.CORSConfig{
+	cfg := CORSConfig{
 		Enabled:          true,
 		AllowedOrigins:   []string{"https://app.example.com"},
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost},
@@ -134,7 +132,7 @@ func TestCORSAllowedOriginAndPreflight(t *testing.T) {
 }
 
 func TestCORSRejectsDisallowedOrigin(t *testing.T) {
-	handler, err := CORS(config.CORSConfig{
+	handler, err := CORS(CORSConfig{
 		Enabled:        true,
 		AllowedOrigins: []string{"https://app.example.com"},
 	})
@@ -156,7 +154,7 @@ func TestCORSRejectsDisallowedOrigin(t *testing.T) {
 }
 
 func TestCORSRejectsWildcardWithCredentials(t *testing.T) {
-	_, err := CORS(config.CORSConfig{
+	_, err := CORS(CORSConfig{
 		Enabled:          true,
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,

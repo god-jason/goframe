@@ -14,6 +14,9 @@ import (
 	"github.com/god-jason/goframe/logger"
 )
 
+// maxConcurrentChecks 是单次健康检查的最大并发数。
+const maxConcurrentChecks = 8
+
 // Status 表示健康状态。
 type Status string
 
@@ -83,6 +86,16 @@ func (c *Checker) SetLogger(log logger.Logger) {
 	}
 	c.mu.Lock()
 	c.log = log
+	c.mu.Unlock()
+}
+
+// SetTimeout 设置单项检查超时，d<=0 时恢复默认 2 秒。
+func (c *Checker) SetTimeout(d time.Duration) {
+	if d <= 0 {
+		d = 2 * time.Second
+	}
+	c.mu.Lock()
+	c.timeout = d
 	c.mu.Unlock()
 }
 
@@ -156,13 +169,25 @@ func (c *Checker) run(ctx context.Context, onlyCritical bool) (Status, []CheckRe
 	}
 	c.mu.RUnlock()
 
+	c.mu.RLock()
+	timeout := c.timeout
+	c.mu.RUnlock()
+
 	results := make([]CheckResult, len(checks))
+	// 限制并发检查数量，避免探针被高频调用时瞬间创建大量 goroutine。
+	limit := maxConcurrentChecks
+	if len(checks) < limit {
+		limit = len(checks)
+	}
+	sem := make(chan struct{}, limit)
 	var wg sync.WaitGroup
 	for i, check := range checks {
 		wg.Add(1)
 		go func(i int, check Check) {
 			defer wg.Done()
-			results[i] = c.runCheck(ctx, check)
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			results[i] = c.runCheck(ctx, check, timeout)
 		}(i, check)
 	}
 	wg.Wait()
@@ -180,7 +205,7 @@ func (c *Checker) run(ctx context.Context, onlyCritical bool) (Status, []CheckRe
 // runCheck 执行单项检查。
 // 检查函数来自业务或基础设施适配层，可能 panic，因此必须隔离并转换为失败结果；
 // 同时记录失败日志，便于在探针频繁调用时定位异常依赖。
-func (c *Checker) runCheck(ctx context.Context, check Check) (result CheckResult) {
+func (c *Checker) runCheck(ctx context.Context, check Check, timeout time.Duration) (result CheckResult) {
 	result = CheckResult{Name: check.Name, Critical: check.Critical, Status: StatusOK}
 	if check.Fn == nil {
 		return result
@@ -201,7 +226,7 @@ func (c *Checker) runCheck(ctx context.Context, check Check) (result CheckResult
 		}
 	}()
 
-	checkCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	checkCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	start := time.Now()

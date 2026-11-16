@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/app"
 	"github.com/god-jason/goframe/auth"
+	"github.com/god-jason/goframe/permission"
 )
 
 const (
@@ -27,9 +27,10 @@ func New() *Module { return &Module{} }
 // Name 返回模块名称。
 func (m *Module) Name() string { return "demo" }
 
-// Init 初始化模块。
-func (m *Module) Init(application *app.App) error {
-	hasher, err := auth.NewPasswordHasher(application.Config.Security.Password)
+// Init 初始化模块。业务模块在 boot.Startup 之后手动调用。
+func (m *Module) Init() error {
+	cfg := auth.Current()
+	hasher, err := auth.NewPasswordHasher(cfg.Password)
 	if err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func (m *Module) Init(application *app.App) error {
 		return err
 	}
 
-	m.handler = NewHandler(service, application.Auth, application)
+	m.handler = NewHandler(service, auth.Get(), permission.Get())
 	return nil
 }
 

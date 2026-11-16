@@ -10,7 +10,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
 )
 
@@ -36,7 +35,7 @@ type gormDatabase struct {
 }
 
 // Open 根据配置创建数据库连接。
-func Open(cfg config.DatabaseConfig, log logger.Logger) (Database, error) {
+func Open(cfg Config, log logger.Logger) (Database, error) {
 	if log == nil {
 		log = logger.NewNop()
 	}

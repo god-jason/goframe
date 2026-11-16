@@ -10,12 +10,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
 )
 
-func testServerConfig() config.ServerConfig {
-	cfg := config.Default().Server
+func testServerConfig() Config {
+	cfg := DefaultConfig()
 	cfg.Host = "127.0.0.1"
 	cfg.Port = 0
 	cfg.ShutdownTimeout = 2 * time.Second
@@ -85,18 +84,47 @@ func TestNewRejectsNilHandler(t *testing.T) {
 }
 
 func TestBuildTLSConfig(t *testing.T) {
-	tlsConfig, err := buildTLSConfig(config.TLSConfig{Mode: "none"})
-	if err != nil || tlsConfig != nil {
-		t.Fatalf("none mode = %v, %v", tlsConfig, err)
+	material, err := buildTLSConfig(TLSConfig{Mode: "none"}, logger.NewNop())
+	if err != nil || material.config != nil {
+		t.Fatalf("none mode = %+v, %v", material, err)
 	}
 
-	if _, err := buildTLSConfig(config.TLSConfig{Mode: "file", CertFile: "missing.crt", KeyFile: "missing.key"}); err == nil {
+	if _, err := buildTLSConfig(TLSConfig{Mode: "file", CertFile: "missing.crt", KeyFile: "missing.key"}, logger.NewNop()); err == nil {
 		t.Fatal("expected missing certificate error")
 	}
-	if _, err := buildTLSConfig(config.TLSConfig{Mode: "acme", ACME: config.ACMEConfig{Domains: []string{"example.com"}}}); err == nil {
-		t.Fatal("expected acme mode to be rejected")
+
+	acmeCfg := TLSConfig{
+		Mode: "acme",
+		ACME: ACMEConfig{
+			Email:             "admin@example.com",
+			Domains:           []string{"example.com"},
+			CacheDir:          t.TempDir(),
+			HTTPChallengeAddr: "127.0.0.1:0",
+		},
 	}
-	if _, err := buildTLSConfig(config.TLSConfig{Mode: "unknown"}); err == nil {
+	acmeMaterial, err := buildTLSConfig(acmeCfg, logger.NewNop())
+	if err != nil {
+		t.Fatalf("acme config: %v", err)
+	}
+	if acmeMaterial.config == nil || acmeMaterial.challenge == nil {
+		t.Fatalf("unexpected acme material: %+v", acmeMaterial)
+	}
+
+	acmeCfg.ACME.Challenge = "tls-alpn-01"
+	alpnMaterial, err := buildTLSConfig(acmeCfg, logger.NewNop())
+	if err != nil {
+		t.Fatalf("acme tls-alpn: %v", err)
+	}
+	if alpnMaterial.challenge != nil {
+		t.Fatal("tls-alpn mode must not start http challenge server")
+	}
+
+	acmeCfg.ACME.Challenge = "dns-01"
+	if _, err := buildTLSConfig(acmeCfg, logger.NewNop()); err == nil {
+		t.Fatal("expected dns-01 unsupported error")
+	}
+
+	if _, err := buildTLSConfig(TLSConfig{Mode: "unknown"}, logger.NewNop()); err == nil {
 		t.Fatal("expected unsupported tls mode error")
 	}
 }

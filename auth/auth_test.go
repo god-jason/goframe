@@ -5,18 +5,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
 )
 
-func testAuthConfig() config.AuthConfig {
-	cfg := config.Default()
-	cfg.Security.Auth.Secret = strings.Repeat("k", 32)
-	return cfg.Security.Auth
+func testAuthConfig() Config {
+	cfg := DefaultConfig()
+	cfg.Secret = strings.Repeat("k", 32)
+	return cfg
 }
 
 func TestArgon2PasswordHasher(t *testing.T) {
-	hasher, err := NewPasswordHasher(config.PasswordConfig{
+	hasher, err := NewPasswordHasher(PasswordConfig{
 		Algorithm:   "argon2id",
 		Memory:      8192,
 		Iterations:  1,

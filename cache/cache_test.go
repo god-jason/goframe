@@ -44,6 +44,25 @@ func TestMemoryCacheConcurrentAccess(t *testing.T) {
 	}
 }
 
+func TestMemoryCacheMaxEntries(t *testing.T) {
+	c := NewMemoryWithOptions(MemoryOptions{MaxEntries: 2})
+	defer c.Close()
+	ctx := context.Background()
+
+	for _, key := range []string{"a", "b", "c"} {
+		if err := c.Set(ctx, key, payload{Name: key}, 0); err != nil {
+			t.Fatalf("Set %s: %v", key, err)
+		}
+	}
+
+	c.mu.RLock()
+	size := len(c.items)
+	c.mu.RUnlock()
+	if size != 2 {
+		t.Fatalf("cache size = %d, want 2", size)
+	}
+}
+
 func TestMemoryCacheValueMustBePointer(t *testing.T) {
 	c := NewMemory()
 	defer c.Close()

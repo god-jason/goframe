@@ -37,6 +37,25 @@ func waitFor(t *testing.T, description string, condition func() bool) {
 	t.Fatalf("condition not met: %s", description)
 }
 
+func TestPoolClosesWhenParentContextCanceled(t *testing.T) {
+	p := New(Options{Name: "cancel", Workers: 1, QueueSize: 2})
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := p.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer stopCancel()
+		_ = p.Stop(stopCtx)
+	}()
+
+	cancel()
+	waitFor(t, "pool marked stopped", func() bool { return !p.IsRunning() })
+	if err := p.Submit(context.Background(), func(context.Context) error { return nil }); !stderrors.Is(err, ErrClosed) {
+		t.Fatalf("Submit after cancel = %v, want ErrClosed", err)
+	}
+}
+
 func TestSubmitExecutesAllTasks(t *testing.T) {
 	p := newTestPool(t, 2, 8)
 	ctx := context.Background()

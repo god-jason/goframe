@@ -5,22 +5,20 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // Router 封装 API 根分组。路由分组只用于组织接口和挂载中间件，
 // 不代表最终资源授权。
 type Router struct {
 	engine *gin.Engine
-	cfg    config.ServerConfig
+	cfg    Options
 	api    *gin.RouterGroup
 }
 
 // New 创建路由封装。
-func New(engine *gin.Engine, cfg config.ServerConfig) *Router {
-	r := &Router{engine: engine, cfg: cfg}
-	r.api = engine.Group(joinPath(cfg.APIPrefix, cfg.APIVersion))
+func New(engine *gin.Engine, opts Options) *Router {
+	r := &Router{engine: engine, cfg: opts}
+	r.api = engine.Group(joinPath(opts.APIPrefix, opts.APIVersion))
 	return r
 }
 

@@ -12,7 +12,6 @@ import (
 
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
 )
 
@@ -85,7 +84,7 @@ func TestGormLoggerSilentMode(t *testing.T) {
 }
 
 func TestOpenRejectsUnsupportedDriver(t *testing.T) {
-	cfg := config.DatabaseConfig{Driver: "unknown", DSN: "dsn"}
+	cfg := Config{Driver: "unknown", DSN: "dsn"}
 	if _, err := Open(cfg, logger.NewNop()); err == nil {
 		t.Fatal("expected unsupported driver error")
 	}

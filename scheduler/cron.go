@@ -10,7 +10,6 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
 )
 
@@ -34,7 +33,7 @@ type entry struct {
 }
 
 // New 创建定时任务调度器。
-func New(log logger.Logger, cfg config.SchedulerConfig) (*Cron, error) {
+func New(log logger.Logger, cfg Config) (*Cron, error) {
 	if log == nil {
 		log = logger.NewNop()
 	}

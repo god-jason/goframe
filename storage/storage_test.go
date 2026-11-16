@@ -5,12 +5,10 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/god-jason/goframe/config"
 )
 
 func TestLocalStorageGetURL(t *testing.T) {
-	store, err := NewLocal(config.StorageConfig{
+	store, err := NewLocal(Config{
 		Driver:  "local",
 		Path:    t.TempDir(),
 		BaseURL: "https://cdn.example.com/files/",
@@ -35,7 +33,7 @@ func TestLocalStorageGetURL(t *testing.T) {
 }
 
 func TestLocalStorageCanceledContext(t *testing.T) {
-	store, err := NewLocal(config.StorageConfig{Driver: "local", Path: t.TempDir()})
+	store, err := NewLocal(Config{Driver: "local", Path: t.TempDir()})
 	if err != nil {
 		t.Fatalf("NewLocal: %v", err)
 	}
@@ -60,10 +58,10 @@ func TestLocalStorageCanceledContext(t *testing.T) {
 }
 
 func TestNewRejectsUnsupportedDriver(t *testing.T) {
-	if _, err := New(config.StorageConfig{Driver: "s3", Endpoint: "x", Bucket: "b"}); err == nil {
+	if _, err := New(Config{Driver: "s3", Endpoint: "x", Bucket: "b"}); err == nil {
 		t.Fatal("expected s3 driver to be unavailable")
 	}
-	if _, err := New(config.StorageConfig{Driver: "unknown"}); err == nil {
+	if _, err := New(Config{Driver: "unknown"}); err == nil {
 		t.Fatal("expected unsupported driver error")
 	}
 }

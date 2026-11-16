@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // RedisCache 是基于 Redis 的缓存实现。
@@ -18,7 +16,7 @@ type RedisCache struct {
 }
 
 // NewRedis 创建 Redis 缓存并检查连通性。
-func NewRedis(cfg config.RedisConfig) (*RedisCache, error) {
+func NewRedis(cfg Config) (*RedisCache, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Addr,
 		Username: cfg.Username,

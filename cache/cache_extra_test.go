@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/god-jason/goframe/config"
 )
 
 func TestMemoryCacheExistsAfterExpiry(t *testing.T) {
@@ -37,7 +35,7 @@ func TestMemoryCacheSetMarshalError(t *testing.T) {
 }
 
 func TestNewFallsBackToMemory(t *testing.T) {
-	c, err := New(config.RedisConfig{})
+	c, err := New(Config{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

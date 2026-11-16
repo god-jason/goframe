@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	stderrors "errors"
+	"strconv"
 	"testing"
 )
 
@@ -28,6 +29,30 @@ func TestKeyedLimiterBurst(t *testing.T) {
 	allowed, err = limiter.Allow(ctx, "ip:5.6.7.8")
 	if err != nil || !allowed {
 		t.Fatalf("expected other key to be independent: %v, %v", allowed, err)
+	}
+}
+
+func TestKeyedLimiterBucketCap(t *testing.T) {
+	limiter := NewKeyedLimiterWithLimit(1, 1, 32)
+	defer limiter.Close()
+	ctx := context.Background()
+
+	for i := 0; i < 2000; i++ {
+		key := "ip:10.0.0." + strconv.Itoa(i%255) + ":" + strconv.Itoa(i)
+		if _, err := limiter.Allow(ctx, key); err != nil {
+			t.Fatalf("Allow: %v", err)
+		}
+	}
+
+	total := 0
+	for i := range limiter.shards {
+		limiter.shards[i].mu.Lock()
+		total += len(limiter.shards[i].buckets)
+		limiter.shards[i].mu.Unlock()
+	}
+	// 每个分片上限为 maxBuckets/shardCount+1，总量不超过 (32/16+1)*16。
+	if total > 48 {
+		t.Fatalf("bucket count = %d, want <= 48", total)
 	}
 }
 

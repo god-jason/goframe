@@ -14,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/errors"
 )
 
@@ -28,7 +27,7 @@ type Protector struct {
 }
 
 // New 创建 CSRF 保护器。secret 为空时生成进程内随机密钥。
-func New(cfg config.CSRFConfig) (*Protector, error) {
+func New(cfg Config) (*Protector, error) {
 	secret := []byte(cfg.Secret)
 	if len(secret) == 0 {
 		secret = make([]byte, 32)

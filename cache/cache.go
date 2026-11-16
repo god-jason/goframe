@@ -5,8 +5,6 @@ import (
 	"context"
 	stderrors "errors"
 	"time"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // ErrMiss 表示缓存未命中。
@@ -27,7 +25,7 @@ type Pinger interface {
 }
 
 // New 根据配置创建缓存实例：启用 Redis 时使用 Redis，否则使用进程内内存缓存。
-func New(cfg config.RedisConfig) (Cache, error) {
+func New(cfg Config) (Cache, error) {
 	if cfg.Enabled {
 		return NewRedis(cfg)
 	}

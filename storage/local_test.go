@@ -5,13 +5,11 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/god-jason/goframe/config"
 )
 
 func newTestStorage(t *testing.T) *LocalStorage {
 	t.Helper()
-	store, err := NewLocal(config.StorageConfig{Driver: "local", Path: t.TempDir()})
+	store, err := NewLocal(Config{Driver: "local", Path: t.TempDir()})
 	if err != nil {
 		t.Fatalf("NewLocal: %v", err)
 	}

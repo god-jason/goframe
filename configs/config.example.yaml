@@ -44,7 +44,19 @@ redis:
 logger:
   level: info
   format: json
-  output: stdout
+  # stdout / stderr / 文件路径；文件输出默认开启滚动
+  output: logs/app.log
+  rotation:
+    enabled: true
+    # 单个日志文件上限，达到上限后自动切分
+    max_size: 100MB
+    # 旧日志保留天数与数量
+    max_age: 30
+    max_backups: 10
+    # 压缩旧日志为 .gz
+    compress: true
+    # 备份时间使用本地时区
+    local_time: true
 
 security:
   enabled: true
@@ -93,17 +105,19 @@ security:
     access_token_ttl: 30m
     refresh_token_ttl: 720h
     leeway: 30s
-
-  password:
-    algorithm: argon2id
-    memory: 65536
-    iterations: 3
-    parallelism: 1
+    password:
+      algorithm: argon2id
+      memory: 65536
+      iterations: 3
+      parallelism: 1
 
   rate_limit:
     enabled: true
+    # 每个客户端 IP 的令牌补充速率与桶容量
     global_rate: 1000
     global_burst: 2000
+    # 限流 key 数量上限，防止伪造 IP 等高基数 key 占用过多内存
+    max_buckets: 100000
     fail_open: false
 
   csrf:
@@ -117,6 +131,22 @@ security:
   upload:
     max_size: 50MB
     scan_enabled: false
+    allowed_extensions:
+      - .jpg
+      - .jpeg
+      - .png
+      - .gif
+      - .webp
+      - .pdf
+      - .txt
+      - .csv
+      - .zip
+    # 为空表示不额外限制 MIME，仅按扩展名与 Magic Number 校验
+    allowed_mime_types: []
+    image_max_width: 4096
+    image_max_height: 4096
+    image_max_pixels: 33554432
+    image_quality: 85
 
   audit:
     enabled: true
@@ -129,10 +159,22 @@ security:
     key: ${ENCRYPTION_KEY}
 
 tls:
-  # none: 由反向代理终止 TLS；file: 加载证书；acme: 当前版本未内置
+  # none: 由反向代理终止 TLS；file: 加载已有证书；acme: 自动申请与续期
   mode: none
   cert_file: ""
   key_file: ""
+  acme:
+    email: ${ACME_EMAIL}
+    # 域名必须解析到本机；HTTP-01 需要 80 端口可访问，TLS-ALPN-01 需要 443
+    domains: []
+    # 留空使用 Let's Encrypt 生产环境；测试可填 Staging Directory URL
+    directory_url: ""
+    # http-01 / tls-alpn-01；DNS-01 暂未实现
+    challenge: http-01
+    cache_dir: data/acme
+    http_challenge_addr: ":80"
+    disable_http_challenge: false
+    renew_before: 720h
 
 spa:
   # embed 模式需通过 app.WithFileSystem 注入前端资源
@@ -155,3 +197,59 @@ pool:
   # 后台任务协程池；workers=0 时按 CPU 核数自动计算
   workers: 8
   queue_size: 1024
+
+mqtt:
+  enabled: false
+  brokers: []
+  client_id: ""
+  username: ""
+  password: ${MQTT_PASSWORD}
+  keep_alive: 30s
+  connect_timeout: 10s
+  reconnect_interval: 5s
+  clean_session: false
+  auto_reconnect: true
+  tls:
+    enabled: false
+    ca_file: ""
+    cert_file: ""
+    key_file: ""
+    server_name: ""
+
+broker:
+  # 嵌入式 MQTT Broker，为设备提供标准 MQTT 3.1/3.1.1 接入
+  enabled: false
+  addr: ":1883"
+  # 关闭匿名时，必须通过 app.WithBrokerAuthenticator 注入鉴权器
+  allow_anonymous: false
+  max_packet_size: 1MB
+  max_clients: 10000
+  max_subscriptions: 100
+  max_queued_messages: 100
+  # 持久会话过期时间，从最后一次断开开始计算
+  session_expiry: 24h
+  write_timeout: 10s
+  connect_timeout: 10s
+  # QoS 1/2 未确认消息的重发间隔
+  retransmit_interval: 10s
+  send_queue: 256
+  tls:
+    # 开启后直接监听 TLS（默认端口通常为 8883）
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+websocket:
+  enabled: false
+  path: /ws
+  # 为空表示只允许同源；"*" 表示允许任意来源（不建议生产使用）
+  allowed_origins: []
+  max_message_size: 1MB
+  read_timeout: 60s
+  write_timeout: 10s
+  ping_interval: 30s
+  send_queue: 256
+  # 上行消息处理队列，队列满时关闭慢连接
+  inbound_queue: 64
+  # 关闭匿名时，必须通过 app.WithWebSocketAuthenticator 注入鉴权函数
+  allow_anonymous: false

@@ -6,12 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/app"
 	"github.com/god-jason/goframe/auth"
+	"github.com/god-jason/goframe/config"
 	apperrors "github.com/god-jason/goframe/errors"
+	"github.com/god-jason/goframe/logger"
 	"github.com/god-jason/goframe/middleware"
+	"github.com/god-jason/goframe/permission"
 	"github.com/god-jason/goframe/response"
 	"github.com/god-jason/goframe/security/audit"
+	"github.com/god-jason/goframe/security/csrf"
 	"github.com/god-jason/goframe/security/ratelimit"
 )
 
@@ -28,16 +31,20 @@ type refreshRequest struct {
 type Handler struct {
 	service      *Service
 	auth         auth.Manager
-	app          *app.App
+	permission   permission.Authorizer
+	csrf         *csrf.Protector
+	auditor      audit.Auditor
 	loginLimiter *ratelimit.KeyedLimiter
 }
 
 // NewHandler 创建示例处理器。
-func NewHandler(service *Service, manager auth.Manager, application *app.App) *Handler {
+func NewHandler(service *Service, manager auth.Manager, authorizer permission.Authorizer) *Handler {
 	return &Handler{
 		service:      service,
 		auth:         manager,
-		app:          application,
+		permission:   authorizer,
+		csrf:         csrf.Get(),
+		auditor:      audit.Get(),
 		loginLimiter: ratelimit.NewKeyedLimiter(5, 10),
 	}
 }
@@ -53,7 +60,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	protected.POST("/auth/logout", h.logout)
 	protected.GET("/user/me", h.me)
 	protected.GET("/system/info",
-		middleware.RequirePermission(h.app.Permission, "system:read", nil),
+		middleware.RequirePermission(h.permission, "system:read", nil),
 		h.systemInfo,
 	)
 }
@@ -63,7 +70,7 @@ func (h *Handler) ping(c *gin.Context) {
 }
 
 func (h *Handler) csrfToken(c *gin.Context) {
-	protector := h.app.CSRFProtector()
+	protector := h.csrf
 	if protector == nil {
 		response.Fail(c, apperrors.Unavailable("csrf protection is disabled"))
 		return
@@ -146,10 +153,11 @@ func (h *Handler) me(c *gin.Context) {
 }
 
 func (h *Handler) systemInfo(c *gin.Context) {
+	app := config.App()
 	response.Success(c, gin.H{
-		"name":        h.app.Config.App.Name,
-		"version":     h.app.Config.App.Version,
-		"environment": h.app.Config.App.Environment,
+		"name":        app.Name,
+		"version":     app.Version,
+		"environment": app.Environment,
 		"go_version":  runtime.Version(),
 		"goroutines":  runtime.NumGoroutine(),
 	})
@@ -164,7 +172,7 @@ func (h *Handler) sessionMeta(c *gin.Context) auth.SessionMeta {
 }
 
 func (h *Handler) record(c *gin.Context, action, result, userID string, detail map[string]any) {
-	if h.app.Auditor == nil {
+	if h.auditor == nil {
 		return
 	}
 	event := audit.Event{
@@ -179,7 +187,7 @@ func (h *Handler) record(c *gin.Context, action, result, userID string, detail m
 		Detail:    detail,
 		CreatedAt: time.Now().UTC(),
 	}
-	if err := h.app.Auditor.Record(c.Request.Context(), event); err != nil {
-		h.app.Logger.Warn("audit record failed")
+	if err := h.auditor.Record(c.Request.Context(), event); err != nil {
+		logger.Get().Warn("audit record failed")
 	}
 }

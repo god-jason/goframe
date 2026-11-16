@@ -8,22 +8,43 @@ import (
 	"time"
 )
 
+const defaultMaxEntries = 100000
+
 type memoryItem struct {
 	data      []byte
 	expiresAt time.Time
 }
 
-// MemoryCache 是进程内缓存实现，适用于单实例部署与测试。
-type MemoryCache struct {
-	mu        sync.RWMutex
-	items     map[string]memoryItem
-	stop      chan struct{}
-	closeOnce sync.Once
+// MemoryOptions 是内存缓存配置。
+type MemoryOptions struct {
+	// MaxEntries 是 key 数量上限，<=0 时使用默认值 100000。
+	MaxEntries int
 }
 
-// NewMemory 创建内存缓存。
+// MemoryCache 是进程内缓存实现，适用于单实例部署与测试。
+type MemoryCache struct {
+	mu         sync.RWMutex
+	items      map[string]memoryItem
+	maxEntries int
+	stop       chan struct{}
+	closeOnce  sync.Once
+}
+
+// NewMemory 创建内存缓存，使用默认容量上限。
 func NewMemory() *MemoryCache {
-	c := &MemoryCache{items: make(map[string]memoryItem), stop: make(chan struct{})}
+	return NewMemoryWithOptions(MemoryOptions{})
+}
+
+// NewMemoryWithOptions 创建带容量上限的内存缓存。
+func NewMemoryWithOptions(opts MemoryOptions) *MemoryCache {
+	if opts.MaxEntries <= 0 {
+		opts.MaxEntries = defaultMaxEntries
+	}
+	c := &MemoryCache{
+		items:      make(map[string]memoryItem),
+		maxEntries: opts.MaxEntries,
+		stop:       make(chan struct{}),
+	}
 	go c.janitor()
 	return c
 }
@@ -65,9 +86,27 @@ func (c *MemoryCache) Set(ctx context.Context, key string, value any, ttl time.D
 	}
 
 	c.mu.Lock()
+	if _, exists := c.items[key]; !exists && c.maxEntries > 0 && len(c.items) >= c.maxEntries {
+		c.evictLocked(time.Now())
+	}
 	c.items[key] = item
 	c.mu.Unlock()
 	return nil
+}
+
+// evictLocked 在容量达到上限时腾出位置：优先淘汰已过期项，否则淘汰任意项。
+// 调用方必须持有 c.mu。
+func (c *MemoryCache) evictLocked(now time.Time) {
+	for key, item := range c.items {
+		if !item.expiresAt.IsZero() && now.After(item.expiresAt) {
+			delete(c.items, key)
+			return
+		}
+	}
+	for key := range c.items {
+		delete(c.items, key)
+		return
+	}
 }
 
 // Delete 删除缓存。

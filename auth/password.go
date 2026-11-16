@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/argon2"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // PasswordHasher 是密码哈希接口。密码不能明文存储，也不能使用 MD5/SHA1 等直接保存。
@@ -28,7 +26,7 @@ type Argon2Hasher struct {
 }
 
 // NewPasswordHasher 创建 Argon2id 密码哈希器。
-func NewPasswordHasher(cfg config.PasswordConfig) (*Argon2Hasher, error) {
+func NewPasswordHasher(cfg PasswordConfig) (*Argon2Hasher, error) {
 	if cfg.Memory < 8*1024 {
 		return nil, fmt.Errorf("auth: argon2 memory must be at least 8192 KiB")
 	}

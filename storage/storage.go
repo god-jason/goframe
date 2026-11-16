@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"time"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // Storage 是框架统一文件存储接口。文件 Key 由服务端生成，不使用客户端原始文件名。
@@ -20,7 +18,7 @@ type Storage interface {
 }
 
 // New 根据配置创建存储实现。
-func New(cfg config.StorageConfig) (Storage, error) {
+func New(cfg Config) (Storage, error) {
 	switch cfg.Driver {
 	case "local":
 		return NewLocal(cfg)

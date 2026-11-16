@@ -6,14 +6,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/god-jason/goframe/config"
 )
 
 func TestRouterGroupsAndPrefix(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	router := New(engine, config.ServerConfig{APIPrefix: "/api", APIVersion: "v1"})
+	router := New(engine, Options{APIPrefix: "/api", APIVersion: "v1"})
 
 	router.Public().GET("/ping", func(c *gin.Context) { c.String(http.StatusOK, "public") })
 	router.Auth().POST("/login", func(c *gin.Context) { c.String(http.StatusOK, "auth") })
@@ -49,7 +47,7 @@ func TestRouterGroupsAndPrefix(t *testing.T) {
 func TestRouterWithoutVersion(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	router := New(engine, config.ServerConfig{APIPrefix: "/api"})
+	router := New(engine, Options{APIPrefix: "/api"})
 	router.Public().GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	recorder := httptest.NewRecorder()

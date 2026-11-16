@@ -181,6 +181,12 @@ func (p *Pool) Start(ctx context.Context) error {
 		p.wg.Add(1)
 		go p.worker(i + 1)
 	}
+	// 父 context 取消时 worker 会退出；同步把池标记为已关闭，
+	// 避免 Submit 继续入队后在满队列上永久阻塞。
+	go func() {
+		<-runCtx.Done()
+		p.markStopped()
+	}()
 	p.log.Info("worker pool started",
 		logger.String("pool", p.name),
 		logger.Int("workers", p.workers),
@@ -268,25 +274,10 @@ func (p *Pool) Stop(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	p.lifecycleMu.Lock()
-	if p.stopped.Load() {
-		p.lifecycleMu.Unlock()
+	cancel, started := p.markStopped()
+	if !started && !p.started.Load() {
 		return nil
 	}
-	p.stopped.Store(true)
-
-	// 与 Submit 的“检查 + 入队”互斥：关闭 done 后不会再有新任务进入队列。
-	p.submitMu.Lock()
-	close(p.done)
-	p.submitMu.Unlock()
-
-	if !p.started.Load() {
-		p.lifecycleMu.Unlock()
-		return nil
-	}
-	close(p.stopCh)
-	cancel := p.cancel
-	p.lifecycleMu.Unlock()
 
 	// 等待所有 worker 排空队列后退出；超时则取消任务上下文。
 	waited := make(chan struct{})
@@ -297,6 +288,9 @@ func (p *Pool) Stop(ctx context.Context) error {
 
 	select {
 	case <-waited:
+		if cancel != nil {
+			cancel()
+		}
 		p.log.Info("worker pool stopped",
 			logger.String("pool", p.name),
 			logger.Uint64("completed", p.completed.Load()),
@@ -321,6 +315,29 @@ func (p *Pool) Stop(ctx context.Context) error {
 		)
 		return ctx.Err()
 	}
+}
+
+// markStopped 把池切换为关闭状态，并返回取消函数与是否真正执行了状态切换。
+// 通过 stopped 标志保证 stopCh/done 只关闭一次，供 Stop 与父 context 监听共用。
+func (p *Pool) markStopped() (context.CancelFunc, bool) {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
+	if p.stopped.Load() {
+		return nil, false
+	}
+	p.stopped.Store(true)
+
+	// 与 Submit 的“检查 + 入队”互斥：关闭 done 后不会再有新任务进入队列。
+	p.submitMu.Lock()
+	close(p.done)
+	p.submitMu.Unlock()
+
+	if !p.started.Load() {
+		return nil, false
+	}
+	close(p.stopCh)
+	return p.cancel, true
 }
 
 // Stats 返回当前统计快照。

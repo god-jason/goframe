@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 func TestParseByteSize(t *testing.T) {
 	cases := map[string]int64{
@@ -29,42 +34,73 @@ func TestParseByteSize(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigIsValid(t *testing.T) {
-	cfg := Default()
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("default config should be valid: %v", err)
+type testSectionConfig struct {
+	Name     string        `mapstructure:"name"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+	Size     ByteSize      `mapstructure:"size"`
+	MaxItems int           `mapstructure:"max_items"`
+	Enabled  bool          `mapstructure:"enabled"`
+}
+
+func TestSectionLoadsFileAndKeepsDefaults(t *testing.T) {
+	defaults := testSectionConfig{
+		Name:     "default",
+		Timeout:  3 * time.Second,
+		Size:     1 << 20,
+		MaxItems: 7,
+		Enabled:  true,
+	}
+	section := Register("test.section", defaults)
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := "test:\n  section:\n    name: from-file\n    timeout: 5s\n    size: 2MB\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	SetFile(path)
+	defer SetFile("")
+
+	if err := Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	got := section.Get()
+	if got.Name != "from-file" {
+		t.Fatalf("name = %q", got.Name)
+	}
+	if got.Timeout != 5*time.Second {
+		t.Fatalf("timeout = %v", got.Timeout)
+	}
+	if got.Size.Bytes() != 2<<20 {
+		t.Fatalf("size = %d", got.Size.Bytes())
+	}
+	// 文件中缺失的字段保留默认值。
+	if got.MaxItems != 7 || !got.Enabled {
+		t.Fatalf("defaults not preserved: %+v", got)
 	}
 }
 
-func TestProductionRequiresStrongSecret(t *testing.T) {
-	cfg := Default()
-	cfg.App.Environment = "production"
-	cfg.Security.Auth.Secret = "short"
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected production validation to reject weak jwt secret")
-	}
+func TestSectionEnvOverride(t *testing.T) {
+	section := Register("test.env", testSectionConfig{Name: "default", MaxItems: 1})
+	t.Setenv("GOFRAME_TEST_ENV_NAME", "from-env")
 
-	cfg.Security.Auth.Secret = "0123456789abcdef0123456789abcdef"
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected strong secret to pass: %v", err)
+	path := filepath.Join(t.TempDir(), "empty.yaml")
+	if err := os.WriteFile(path, []byte("test:\n  env: {}\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
-}
-
-func TestProductionRejectsDebugMode(t *testing.T) {
-	cfg := Default()
-	cfg.App.Environment = "production"
-	cfg.Server.Mode = "debug"
-	cfg.Security.Auth.Secret = "0123456789abcdef0123456789abcdef"
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected production debug mode to be rejected")
+	SetFile(path)
+	defer SetFile("")
+	if err := Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if got := section.Get().Name; got != "from-env" {
+		t.Fatalf("name = %q, want from-env", got)
 	}
 }
 
-func TestCORSWithCredentialsRejectsWildcard(t *testing.T) {
-	cfg := Default()
-	cfg.Security.CORS.AllowCredentials = true
-	cfg.Security.CORS.AllowedOrigins = []string{"*"}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected wildcard origin with credentials to be rejected")
+func TestAppSectionDefault(t *testing.T) {
+	app := App()
+	if app.Name == "" || app.Version == "" || app.Environment == "" {
+		t.Fatalf("unexpected app config: %+v", app)
 	}
 }

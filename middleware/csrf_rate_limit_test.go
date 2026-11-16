@@ -10,13 +10,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/security/csrf"
 	"github.com/god-jason/goframe/security/ratelimit"
 )
 
 func TestCSRFMiddleware(t *testing.T) {
-	protector, err := csrf.New(config.CSRFConfig{
+	protector, err := csrf.New(csrf.Config{
 		Enabled:    true,
 		CookieName: "csrf_token",
 		HeaderName: "X-CSRF-Token",

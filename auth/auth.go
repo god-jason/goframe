@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/god-jason/goframe/config"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/id"
 	"github.com/god-jason/goframe/logger"
@@ -44,14 +43,14 @@ type SessionMeta struct {
 
 // Service 是认证服务实现。
 type Service struct {
-	cfg  config.AuthConfig
+	cfg  Config
 	jwt  *JWTManager
 	repo SessionRepository
 	log  logger.Logger
 }
 
 // NewService 创建认证服务。
-func NewService(cfg config.AuthConfig, repo SessionRepository, log logger.Logger) (*Service, error) {
+func NewService(cfg Config, repo SessionRepository, log logger.Logger) (*Service, error) {
 	if log == nil {
 		log = logger.NewNop()
 	}

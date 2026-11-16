@@ -7,13 +7,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/config"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/response"
 )
 
 // SecurityHeaders 设置安全响应头。
-func SecurityHeaders(cfg config.HeadersConfig) gin.HandlerFunc {
+func SecurityHeaders(cfg HeadersConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
@@ -61,7 +60,7 @@ func MethodFilter(allowed []string) gin.HandlerFunc {
 }
 
 // RequestLimits 限制 Query 长度、请求体大小并校验 JSON Content-Type。
-func RequestLimits(cfg config.RequestSecurityConfig) gin.HandlerFunc {
+func RequestLimits(cfg RequestConfig) gin.HandlerFunc {
 	maxBody := cfg.MaxBodySize.Bytes()
 	return func(c *gin.Context) {
 		if cfg.MaxQueryLength > 0 && len(c.Request.URL.RawQuery) > cfg.MaxQueryLength {

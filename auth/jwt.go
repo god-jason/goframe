@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/god-jason/goframe/config"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/id"
 )
@@ -38,7 +37,7 @@ type JWTManager struct {
 
 // NewJWTManager 创建 JWT 管理器。未配置 Secret 时生成进程内随机密钥，
 // 生产环境必须显式配置足够强度的 Secret。
-func NewJWTManager(cfg config.AuthConfig) (*JWTManager, error) {
+func NewJWTManager(cfg Config) (*JWTManager, error) {
 	secret := []byte(cfg.Secret)
 	generated := false
 	if len(secret) == 0 {

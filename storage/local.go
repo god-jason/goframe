@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/god-jason/goframe/config"
 )
 
 // LocalStorage 是基于本地目录的存储实现。文件必须存放在 Web Root 之外。
@@ -20,7 +18,7 @@ type LocalStorage struct {
 }
 
 // NewLocal 创建本地存储。
-func NewLocal(cfg config.StorageConfig) (*LocalStorage, error) {
+func NewLocal(cfg Config) (*LocalStorage, error) {
 	root, err := filepath.Abs(cfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve path %q: %w", cfg.Path, err)

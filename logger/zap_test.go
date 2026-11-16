@@ -76,6 +76,111 @@ func TestNewRejectsInvalidLevel(t *testing.T) {
 	}
 }
 
+func TestChildLoggerCloseDoesNotCloseRoot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.log")
+	root, err := New(Options{Level: "info", Format: "json", Output: path})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	child, ok := root.With(String("module", "test")).(*ZapLogger)
+	if !ok {
+		t.Fatal("With should return *ZapLogger")
+	}
+	if err := child.Close(); err != nil {
+		t.Fatalf("child Close: %v", err)
+	}
+
+	root.Info("after child close")
+	if err := root.Sync(); err != nil {
+		t.Fatalf("root Sync: %v", err)
+	}
+	if !strings.Contains(readFile(t, path), "after child close") {
+		t.Fatal("root logger should still be usable after child Close")
+	}
+}
+
+func TestZapLoggerRotatesLogFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "logs", "app.log")
+	log, err := New(Options{
+		Level:  "info",
+		Format: "json",
+		Output: path,
+		Rotate: RotateOptions{MaxSize: 1 << 20, MaxBackups: 3},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer func() { _ = log.Close() }()
+
+	// 每次写入约 900KB，累计超过 1MB 后触发切分。
+	payload := strings.Repeat("x", 900*1024)
+	log.Info(payload)
+	log.Info(payload)
+	log.Info(payload)
+	if err := log.Sync(); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("current log file missing: %v", err)
+	}
+	backups, err := filepath.Glob(filepath.Join(dir, "logs", "app-*.log"))
+	if err != nil {
+		t.Fatalf("glob backups: %v", err)
+	}
+	if len(backups) == 0 {
+		t.Fatal("expected at least one rotated log file")
+	}
+}
+
+func TestZapLoggerRotationCanBeDisabled(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	log, err := New(Options{
+		Level:  "info",
+		Format: "json",
+		Output: path,
+		Rotate: RotateOptions{Disabled: true},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// 单文件超过滚动阈值也不应产生备份。
+	log.Info(strings.Repeat("y", 2<<20))
+	if err := log.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	backups, err := filepath.Glob(filepath.Join(dir, "app-*.log*"))
+	if err != nil {
+		t.Fatalf("glob backups: %v", err)
+	}
+	if len(backups) != 0 {
+		t.Fatalf("unexpected rotated files: %v", backups)
+	}
+}
+
+func TestRotateDefaults(t *testing.T) {
+	if got := rotateMaxSizeMB(0); got != 100 {
+		t.Fatalf("rotateMaxSizeMB(0) = %d, want 100", got)
+	}
+	if got := rotateMaxSizeMB(512 << 10); got != 1 {
+		t.Fatalf("rotateMaxSizeMB(512KB) = %d, want 1", got)
+	}
+	if got := rotateMaxSizeMB(50 << 20); got != 50 {
+		t.Fatalf("rotateMaxSizeMB(50MB) = %d, want 50", got)
+	}
+	if got := positiveOr(0, 30); got != 30 {
+		t.Fatalf("positiveOr(0, 30) = %d, want 30", got)
+	}
+	if got := positiveOr(7, 30); got != 7 {
+		t.Fatalf("positiveOr(7, 30) = %d, want 7", got)
+	}
+}
+
 func TestNopLogger(t *testing.T) {
 	log := NewNop()
 	log.Debug("d", String("k", "v"))

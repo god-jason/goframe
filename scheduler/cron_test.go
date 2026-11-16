@@ -6,13 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
 )
 
 func newTestCron(t *testing.T, timeout time.Duration) *Cron {
 	t.Helper()
-	cron, err := New(logger.NewNop(), config.SchedulerConfig{Enabled: true, JobTimeout: timeout})
+	cron, err := New(logger.NewNop(), Config{Enabled: true, JobTimeout: timeout})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

@@ -8,12 +8,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/god-jason/goframe/config"
 )
 
-func testConfig() config.CSRFConfig {
-	return config.CSRFConfig{
+func testConfig() Config {
+	return Config{
 		Enabled:    true,
 		CookieName: "csrf_token",
 		HeaderName: "X-CSRF-Token",
