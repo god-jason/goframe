@@ -1,0 +1,152 @@
+# goframe 示例配置
+# 所有 Secret 必须由运行环境注入，禁止提交真实密钥。
+# 支持 ${VAR} 与 ${VAR:-default} 占位符展开，也支持 GOFRAME_* 环境变量覆盖。
+
+app:
+  name: goframe-app
+  version: 1.0.0
+  environment: development
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: release
+  read_timeout: 30s
+  read_header_timeout: 10s
+  write_timeout: 30s
+  idle_timeout: 60s
+  shutdown_timeout: 30s
+  max_header_bytes: 1048576
+  # 只有可信反向代理地址才能提供真实客户端 IP
+  trusted_proxies: []
+  api_prefix: /api
+  api_version: v1
+
+database:
+  # 留空表示不启用数据库；支持 mysql / postgres
+  driver: ""
+  dsn: ${DB_DSN}
+  max_open_conns: 100
+  max_idle_conns: 10
+  conn_max_lifetime: 30m
+  slow_threshold: 500ms
+  log_level: warn
+
+redis:
+  enabled: false
+  addr: ${REDIS_ADDR}
+  username: ""
+  password: ${REDIS_PASSWORD}
+  db: 0
+  pool_size: 20
+  key_prefix: "goframe:"
+
+logger:
+  level: info
+  format: json
+  output: stdout
+
+security:
+  enabled: true
+
+  headers:
+    enabled: true
+    hsts: false
+    hsts_max_age: 8760h
+    csp: ""
+    csp_report_only: true
+
+  cors:
+    enabled: true
+    # 默认不允许跨域；按实际前端域名配置，禁止生产环境使用 *
+    allowed_origins: []
+    allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - HEAD
+      - OPTIONS
+    allowed_headers:
+      - Authorization
+      - Content-Type
+      - X-Request-ID
+      - X-CSRF-Token
+      - X-Tenant-ID
+    exposed_headers:
+      - X-Request-ID
+    allow_credentials: false
+    max_age: 12h
+
+  request:
+    max_body_size: 10MB
+    max_query_length: 4096
+    require_json_body: true
+
+  auth:
+    enabled: true
+    issuer: goframe
+    audience: goframe-api
+    # 生产环境必须配置至少 32 个字符的高强度随机值
+    secret: ${JWT_SECRET}
+    access_token_ttl: 30m
+    refresh_token_ttl: 720h
+    leeway: 30s
+
+  password:
+    algorithm: argon2id
+    memory: 65536
+    iterations: 3
+    parallelism: 1
+
+  rate_limit:
+    enabled: true
+    global_rate: 1000
+    global_burst: 2000
+    fail_open: false
+
+  csrf:
+    enabled: true
+    cookie_name: csrf_token
+    header_name: X-CSRF-Token
+    ttl: 12h
+    secure: false
+    secret: ${CSRF_SECRET}
+
+  upload:
+    max_size: 50MB
+    scan_enabled: false
+
+  audit:
+    enabled: true
+    max_detail_size: 4KB
+
+  encryption:
+    algorithm: aes-256-gcm
+    key_provider: env
+    key_id: primary
+    key: ${ENCRYPTION_KEY}
+
+tls:
+  # none: 由反向代理终止 TLS；file: 加载证书；acme: 当前版本未内置
+  mode: none
+  cert_file: ""
+  key_file: ""
+
+spa:
+  # embed 模式需通过 app.WithFileSystem 注入前端资源
+  enabled: false
+  mode: embed
+  path: web/dist
+  index: index.html
+
+storage:
+  driver: local
+  path: data/storage
+  base_url: ""
+
+scheduler:
+  enabled: true
+  job_timeout: 5m
+  location: Asia/Shanghai
