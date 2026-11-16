@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -82,6 +83,18 @@ func (s *Server) Start() error {
 	s.mu.Unlock()
 
 	go func() {
+		// Serve 运行在独立 goroutine，任何 panic 必须转换为错误回传，
+		// 避免整个进程因单个连接处理异常而退出。
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				s.log.Error("http server panic",
+					logger.Any("panic", recovered),
+					logger.String("stack", string(debug.Stack())),
+				)
+				errCh <- fmt.Errorf("server: serve panic: %v", recovered)
+			}
+		}()
+
 		err := s.http.Serve(listener)
 		if err != nil && !stderrors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -93,6 +106,9 @@ func (s *Server) Start() error {
 	s.log.Info("http server started",
 		logger.String("addr", listener.Addr().String()),
 		logger.Bool("tls", s.tlsConfig != nil),
+		logger.Duration("read_timeout", s.cfg.ReadTimeout),
+		logger.Duration("write_timeout", s.cfg.WriteTimeout),
+		logger.Duration("idle_timeout", s.cfg.IdleTimeout),
 	)
 	return nil
 }
@@ -109,6 +125,7 @@ func (s *Server) Wait() error {
 }
 
 // Shutdown 优雅关闭服务，等待现有请求完成。
+// 超时返回 ctx.Err()，由上层决定是否强制退出。
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	started := s.started
@@ -116,7 +133,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if !started {
 		return nil
 	}
+	s.log.Info("http server stopping")
 	if err := s.http.Shutdown(ctx); err != nil {
+		s.log.Warn("http server shutdown failed", logger.Error(err))
 		return fmt.Errorf("server: shutdown: %w", err)
 	}
 	s.log.Info("http server stopped")

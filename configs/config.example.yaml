@@ -150,3 +150,8 @@ scheduler:
   enabled: true
   job_timeout: 5m
   location: Asia/Shanghai
+
+pool:
+  # 后台任务协程池；workers=0 时按 CPU 核数自动计算
+  workers: 8
+  queue_size: 1024

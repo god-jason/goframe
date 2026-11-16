@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -87,6 +88,25 @@ func TestModuleDuplicateName(t *testing.T) {
 	}
 	if err := manager.Register(&testModule{name: "a", order: &order}); err == nil {
 		t.Fatal("expected duplicate module error")
+	}
+}
+
+type panicModule struct{ *testModule }
+
+func (m *panicModule) Init(*App) error { panic("module boom") }
+
+func TestModulePanicIsConvertedToError(t *testing.T) {
+	var order []string
+	manager := NewModuleManager()
+	if err := manager.Register(&panicModule{testModule: &testModule{name: "panic", order: &order}}); err != nil {
+		t.Fatal(err)
+	}
+	err := manager.Init(nil)
+	if err == nil {
+		t.Fatal("expected module panic to be converted to error")
+	}
+	if !strings.Contains(err.Error(), "panic") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

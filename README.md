@@ -39,6 +39,7 @@ curl -s http://localhost:8080/api/v1/system/info -H "Authorization: Bearer <acce
 - **认证与授权**：JWT（HS256 白名单、iss/aud/exp/nbf/iat 校验）、刷新令牌轮换与重放检测、会话管理、Argon2id 密码哈希、RBAC + 租户/资源授权。
 - **安全基础设施**：安全响应头、CORS、CSRF、限流、审计日志、AES-256-GCM 加密、输入清洗、密钥提供者。
 - **基础设施**：GORM（MySQL/PostgreSQL）、缓存（内存/Redis）、本地文件存储、定时任务、进程内事件总线、健康检查、Prometheus 指标。
+- **后台协程池**：有界队列与固定 worker、任务 panic 隔离、阻塞/非阻塞提交、优雅排空与统计，避免 goroutine 失控。
 - **可测试**：业务逻辑不依赖 Gin/GORM，Repository、Service 与中间件均可独立测试。
 
 ## 目录结构
@@ -59,6 +60,7 @@ goframe/
 ├── cache/          # Cache 接口、Memory、Redis
 ├── storage/        # Storage 接口、本地存储
 ├── scheduler/      # 定时任务接口与 cron 实现
+├── pool/           # 有界协程池（后台任务）
 ├── event/          # 进程内事件总线
 ├── health/         # 存活/就绪/聚合健康检查
 ├── monitor/        # Prometheus 指标
@@ -94,6 +96,25 @@ func (m *Module) Dependencies() []string          // 声明依赖的模块
 func (m *Module) Start(ctx context.Context) error // 后台服务启动
 func (m *Module) Stop(ctx context.Context) error  // 后台服务停止
 ```
+
+## 后台任务与协程池
+
+```go
+// 阻塞提交：队列满时等待空位，ctx 取消时返回错误
+err := application.Submit(ctx, func(ctx context.Context) error {
+    return notify(ctx)
+})
+
+// 非阻塞提交：队列满立即返回 pool.ErrQueueFull，适合可丢弃的采集任务
+err = application.Pool.TrySubmit(ctx, func(ctx context.Context) error {
+    return syncOnce(ctx)
+})
+
+stats := application.Pool.Stats() // workers / queued / running / completed / failed / panics
+```
+
+任务 panic 会被隔离并记录堆栈；应用关闭时会先停止接收新任务，再排空队列。
+协程池参数通过配置 `pool.workers`、`pool.queue_size` 调整。
 
 ## 中间件顺序
 

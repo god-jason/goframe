@@ -41,6 +41,7 @@ func Open(cfg config.DatabaseConfig, log logger.Logger) (Database, error) {
 		log = logger.NewNop()
 	}
 
+	log.Debug("database connecting", logger.String("driver", cfg.Driver))
 	var dialector gorm.Dialector
 	switch strings.ToLower(cfg.Driver) {
 	case "mysql":
@@ -77,9 +78,20 @@ func Open(cfg config.DatabaseConfig, log logger.Logger) (Database, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := db.Ping(ctx); err != nil {
+		log.Error("database ping failed",
+			logger.String("driver", cfg.Driver),
+			logger.Error(err),
+		)
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("database: ping: %w", err)
 	}
+
+	log.Info("database connected",
+		logger.String("driver", cfg.Driver),
+		logger.Int("max_open_conns", cfg.MaxOpenConns),
+		logger.Int("max_idle_conns", cfg.MaxIdleConns),
+		logger.Duration("conn_max_lifetime", cfg.ConnMaxLifetime),
+	)
 	return db, nil
 }
 
@@ -115,5 +127,11 @@ func (d *gormDatabase) Close() error {
 	if d.sqlDB == nil {
 		return nil
 	}
-	return d.sqlDB.Close()
+	d.log.Info("database closing")
+	if err := d.sqlDB.Close(); err != nil {
+		d.log.Warn("database close failed", logger.Error(err))
+		return err
+	}
+	d.log.Info("database closed")
+	return nil
 }

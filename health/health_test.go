@@ -6,6 +6,7 @@ import (
 	stderrors "errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -122,6 +123,51 @@ func TestCheckWithNilFuncAndDuplicateAdd(t *testing.T) {
 	report := decodeReport(t, recorder)
 	if len(report.Checks) != 1 {
 		t.Fatalf("expected duplicate check to be ignored, got %+v", report.Checks)
+	}
+}
+
+func TestCheckPanicIsIsolated(t *testing.T) {
+	checker := New("v1",
+		Check{
+			Name:     "panic-check",
+			Critical: true,
+			Fn:       func(context.Context) error { panic("check boom") },
+		},
+		Check{
+			Name:     "ok-check",
+			Critical: false,
+			Fn:       func(context.Context) error { return nil },
+		},
+	)
+	checker.SetReady(true)
+	engine := newHealthEngine(checker)
+
+	recorder := perform(engine, "/health")
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", recorder.Code)
+	}
+	report := decodeReport(t, recorder)
+	if report.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", report.Status)
+	}
+
+	var foundPanic, foundOK bool
+	for _, result := range report.Checks {
+		switch result.Name {
+		case "panic-check":
+			foundPanic = true
+			if result.Status != StatusFailed || !strings.Contains(result.Error, "panic") {
+				t.Fatalf("unexpected panic result: %+v", result)
+			}
+		case "ok-check":
+			foundOK = true
+			if result.Status != StatusOK {
+				t.Fatalf("unexpected ok result: %+v", result)
+			}
+		}
+	}
+	if !foundPanic || !foundOK {
+		t.Fatalf("missing check results: %+v", report.Checks)
 	}
 }
 

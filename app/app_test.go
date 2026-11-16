@@ -114,6 +114,20 @@ func TestRunServesHealthAndModuleRoutes(t *testing.T) {
 		t.Fatalf("unexpected ping response: %+v", body)
 	}
 
+	// 后台任务应通过应用协程池执行，且 Shutdown 会等待其退出。
+	taskDone := make(chan struct{})
+	if err := application.Submit(context.Background(), func(context.Context) error {
+		close(taskDone)
+		return nil
+	}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	select {
+	case <-taskDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("background task did not run")
+	}
+
 	cancel()
 	select {
 	case err := <-runErr:
@@ -130,6 +144,17 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 	cfg.Server.Port = 0
 	if _, err := New(WithConfig(&cfg), WithLogger(logger.NewNop())); err == nil {
 		t.Fatal("expected invalid port to be rejected")
+	}
+}
+
+func TestRegisterNilModule(t *testing.T) {
+	cfg := testAppConfig(t, 18092)
+	application, err := New(WithConfig(&cfg), WithLogger(logger.NewNop()))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := application.Register(nil); err == nil {
+		t.Fatal("expected nil module error")
 	}
 }
 

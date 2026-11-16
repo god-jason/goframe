@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ func New(log logger.Logger) *Bus {
 }
 
 // Publish 发布事件。
+// 订阅者按注册顺序同步执行；单个订阅者失败或 panic 不会影响其他订阅者。
 func (b *Bus) Publish(ctx context.Context, evt Event) error {
 	if evt.Name == "" {
 		return fmt.Errorf("event: name must not be empty")
@@ -40,6 +42,7 @@ func (b *Bus) Publish(ctx context.Context, evt Event) error {
 	handlers := append([]EventHandler(nil), b.handlers[evt.Name]...)
 	b.mu.RUnlock()
 
+	started := time.Now()
 	var errs []error
 	for _, handler := range handlers {
 		if err := safeCall(ctx, handler, evt); err != nil {
@@ -50,6 +53,12 @@ func (b *Bus) Publish(ctx context.Context, evt Event) error {
 			errs = append(errs, err)
 		}
 	}
+	b.log.Debug("event published",
+		logger.String("event", evt.Name),
+		logger.Int("subscribers", len(handlers)),
+		logger.Int("failed", len(errs)),
+		logger.Duration("elapsed", time.Since(started)),
+	)
 	return stderrors.Join(errs...)
 }
 
@@ -63,7 +72,12 @@ func (b *Bus) Subscribe(name string, handler EventHandler) error {
 	}
 	b.mu.Lock()
 	b.handlers[name] = append(b.handlers[name], handler)
+	count := len(b.handlers[name])
 	b.mu.Unlock()
+	b.log.Debug("event subscribed",
+		logger.String("event", name),
+		logger.Int("subscribers", count),
+	)
 	return nil
 }
 
@@ -72,13 +86,16 @@ func (b *Bus) Unsubscribe(name string) error {
 	b.mu.Lock()
 	delete(b.handlers, name)
 	b.mu.Unlock()
+	b.log.Debug("event unsubscribed", logger.String("event", name))
 	return nil
 }
 
+// safeCall 执行订阅者并隔离 panic。
+// 订阅者属于业务代码，panic 会转换为错误返回，同时保留堆栈到日志。
 func safeCall(ctx context.Context, handler EventHandler, evt Event) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("event: handler panic: %v", r)
+			err = fmt.Errorf("event: handler panic: %v\n%s", r, debug.Stack())
 		}
 	}()
 	return handler(ctx, evt)

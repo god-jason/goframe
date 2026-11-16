@@ -10,6 +10,7 @@ import (
 	"github.com/god-jason/goframe/event"
 	"github.com/god-jason/goframe/logger"
 	"github.com/god-jason/goframe/permission"
+	"github.com/god-jason/goframe/pool"
 	"github.com/god-jason/goframe/scheduler"
 	"github.com/god-jason/goframe/security/audit"
 	"github.com/god-jason/goframe/storage"
@@ -71,6 +72,11 @@ func WithEventBus(bus event.EventBus) Option {
 // WithAuditor 注入审计实现。
 func WithAuditor(auditor audit.Auditor) Option {
 	return func(a *App) { a.Auditor = auditor }
+}
+
+// WithPool 注入后台协程池实现，便于测试或替换调度策略。
+func WithPool(p *pool.Pool) Option {
+	return func(a *App) { a.Pool = p }
 }
 
 // WithFileSystem 注入 SPA 静态资源文件系统（embed 模式）。

@@ -130,6 +130,13 @@ func (s *Service) Login(ctx context.Context, identity *Identity, meta SessionMet
 		_ = s.repo.RevokeSession(ctx, session.ID, now)
 		return nil, nil, err
 	}
+	s.log.Info("user logged in",
+		logger.String("user_id", current.UserID),
+		logger.String("tenant_id", current.TenantID),
+		logger.String("session_id", session.ID),
+		logger.String("ip", meta.IP),
+		logger.String("device", meta.DeviceName),
+	)
 	return tokens, current, nil
 }
 
@@ -197,6 +204,11 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string, meta Session
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
 		s.log.Warn("auth: update session failed", logger.Error(err))
 	}
+	s.log.Info("token refreshed",
+		logger.String("user_id", identity.UserID),
+		logger.String("session_id", session.ID),
+		logger.String("ip", meta.IP),
+	)
 	return tokens, identity, nil
 }
 
@@ -212,7 +224,11 @@ func (s *Service) Logout(ctx context.Context, sessionID string) error {
 		}
 		return err
 	}
-	return s.repo.RevokeSessionTokens(ctx, sessionID, now)
+	if err := s.repo.RevokeSessionTokens(ctx, sessionID, now); err != nil {
+		return err
+	}
+	s.log.Info("user logged out", logger.String("session_id", sessionID))
+	return nil
 }
 
 // ListSessions 列出用户的全部会话。
@@ -233,7 +249,14 @@ func (s *Service) RevokeSession(ctx context.Context, userID, sessionID string) e
 	if err := s.repo.RevokeSession(ctx, sessionID, now); err != nil {
 		return err
 	}
-	return s.repo.RevokeSessionTokens(ctx, sessionID, now)
+	if err := s.repo.RevokeSessionTokens(ctx, sessionID, now); err != nil {
+		return err
+	}
+	s.log.Info("session revoked",
+		logger.String("user_id", userID),
+		logger.String("session_id", sessionID),
+	)
+	return nil
 }
 
 // RevokeAllSessions 撤销用户的全部会话，可保留当前会话。
@@ -242,7 +265,14 @@ func (s *Service) RevokeAllSessions(ctx context.Context, userID, exceptSessionID
 		return apperrors.BadRequest("user id is required")
 	}
 	now := time.Now().UTC()
-	return s.repo.RevokeUserSessions(ctx, userID, exceptSessionID, now)
+	if err := s.repo.RevokeUserSessions(ctx, userID, exceptSessionID, now); err != nil {
+		return err
+	}
+	s.log.Info("all user sessions revoked",
+		logger.String("user_id", userID),
+		logger.String("except_session_id", exceptSessionID),
+	)
+	return nil
 }
 
 func (s *Service) issueTokens(ctx context.Context, now time.Time, session *Session, identity *Identity, familyID, parentTokenID string) (*Tokens, *RefreshToken, error) {

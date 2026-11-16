@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -81,6 +82,7 @@ type Config struct {
 	SPA       SPAConfig       `mapstructure:"spa"`
 	Storage   StorageConfig   `mapstructure:"storage"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
+	Pool      PoolConfig      `mapstructure:"pool"`
 }
 
 // AppConfig 应用基础信息。
@@ -289,6 +291,16 @@ type SchedulerConfig struct {
 	Location   string        `mapstructure:"location"`
 }
 
+// PoolConfig 后台协程池配置。
+// 协程池用于承载审计落盘、通知、数据同步等可异步化的后台任务，
+// 避免每个任务直接 go func 造成 goroutine 数量失控。
+type PoolConfig struct {
+	// Workers 是并发 worker 数量；0 表示按 CPU 核数自动计算。
+	Workers int `mapstructure:"workers"`
+	// QueueSize 是等待队列容量；0 表示使用框架默认值。
+	QueueSize int `mapstructure:"queue_size"`
+}
+
 // Default 返回框架默认配置。默认值遵循“默认安全”原则：
 // 未显式配置的跨域来源一律拒绝，数据库默认不启用。
 func Default() Config {
@@ -391,6 +403,10 @@ func Default() Config {
 		Scheduler: SchedulerConfig{
 			Enabled:    true,
 			JobTimeout: 5 * time.Minute,
+		},
+		Pool: PoolConfig{
+			Workers:   runtime.NumCPU() * 2,
+			QueueSize: 1024,
 		},
 	}
 }

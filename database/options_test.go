@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	stderrors "errors"
 	"os"
 	"path/filepath"
@@ -87,5 +88,18 @@ func TestOpenRejectsUnsupportedDriver(t *testing.T) {
 	cfg := config.DatabaseConfig{Driver: "unknown", DSN: "dsn"}
 	if _, err := Open(cfg, logger.NewNop()); err == nil {
 		t.Fatal("expected unsupported driver error")
+	}
+}
+
+func TestNilDatabaseSafety(t *testing.T) {
+	db := &gormDatabase{}
+	if err := db.Ping(context.Background()); err == nil {
+		t.Fatal("expected ping error on uninitialized database")
+	}
+	if db.Stats() != (sql.DBStats{}) {
+		t.Fatalf("unexpected stats: %+v", db.Stats())
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 }

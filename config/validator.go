@@ -180,6 +180,12 @@ func (c *Config) Validate() error {
 	if c.Scheduler.Enabled && c.Scheduler.JobTimeout <= 0 {
 		add("scheduler.job_timeout must be greater than 0")
 	}
+	if c.Pool.Workers < 0 {
+		add("pool.workers must not be negative")
+	}
+	if c.Pool.QueueSize < 0 {
+		add("pool.queue_size must not be negative")
+	}
 
 	if len(problems) > 0 {
 		return fmt.Errorf("config validation failed: %s", strings.Join(problems, "; "))

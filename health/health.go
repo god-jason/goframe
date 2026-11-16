@@ -3,12 +3,15 @@ package health
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/god-jason/goframe/logger"
 )
 
 // Status 表示健康状态。
@@ -45,11 +48,13 @@ type Report struct {
 }
 
 // Checker 管理健康检查项与就绪状态。
+// 检查项并发执行，单项 panic 会被隔离并记录为失败，不影响其他检查项。
 type Checker struct {
 	version string
 	started time.Time
 	timeout time.Duration
 	ready   atomic.Bool
+	log     logger.Logger
 
 	mu     sync.RWMutex
 	checks map[string]Check
@@ -62,12 +67,23 @@ func New(version string, checks ...Check) *Checker {
 		version: version,
 		started: time.Now(),
 		timeout: 2 * time.Second,
+		log:     logger.NewNop(),
 		checks:  make(map[string]Check),
 	}
 	for _, check := range checks {
 		_ = c.Add(check)
 	}
 	return c
+}
+
+// SetLogger 注入日志实现。建议在应用初始化阶段、开始接收请求前设置。
+func (c *Checker) SetLogger(log logger.Logger) {
+	if log == nil {
+		log = logger.NewNop()
+	}
+	c.mu.Lock()
+	c.log = log
+	c.mu.Unlock()
 }
 
 // Add 注册健康检查项，名称重复时返回错误。
@@ -161,21 +177,52 @@ func (c *Checker) run(ctx context.Context, onlyCritical bool) (Status, []CheckRe
 	return status, results
 }
 
-func (c *Checker) runCheck(ctx context.Context, check Check) CheckResult {
-	result := CheckResult{Name: check.Name, Critical: check.Critical, Status: StatusOK}
+// runCheck 执行单项检查。
+// 检查函数来自业务或基础设施适配层，可能 panic，因此必须隔离并转换为失败结果；
+// 同时记录失败日志，便于在探针频繁调用时定位异常依赖。
+func (c *Checker) runCheck(ctx context.Context, check Check) (result CheckResult) {
+	result = CheckResult{Name: check.Name, Critical: check.Critical, Status: StatusOK}
 	if check.Fn == nil {
 		return result
 	}
+
+	c.mu.RLock()
+	log := c.log
+	c.mu.RUnlock()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result.Status = StatusFailed
+			result.Error = fmt.Sprintf("panic: %v", recovered)
+			log.Error("health check panic",
+				logger.String("check", check.Name),
+				logger.Any("panic", recovered),
+			)
+		}
+	}()
 
 	checkCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
 	start := time.Now()
-	if err := check.Fn(checkCtx); err != nil {
+	err := check.Fn(checkCtx)
+	result.LatencyMS = time.Since(start).Milliseconds()
+	if err != nil {
 		result.Status = StatusFailed
 		result.Error = err.Error()
+		log.Warn("health check failed",
+			logger.String("check", check.Name),
+			logger.Bool("critical", check.Critical),
+			logger.Int64("latency_ms", result.LatencyMS),
+			logger.Error(err),
+		)
+		return result
 	}
-	result.LatencyMS = time.Since(start).Milliseconds()
+
+	log.Debug("health check passed",
+		logger.String("check", check.Name),
+		logger.Int64("latency_ms", result.LatencyMS),
+	)
 	return result
 }
 

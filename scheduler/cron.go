@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -82,6 +83,10 @@ func (s *Cron) Register(name string, spec string, fn func(ctx context.Context) e
 	}
 	e.id = id
 	s.entries[name] = e
+	s.log.Debug("scheduler job registered",
+		logger.String("job", name),
+		logger.String("spec", spec),
+	)
 	return nil
 }
 
@@ -96,6 +101,7 @@ func (s *Cron) run(name string, e *entry, fn func(context.Context) error) {
 			s.log.Error("scheduler job panic",
 				logger.String("job", name),
 				logger.Any("panic", recovered),
+				logger.String("stack", string(debug.Stack())),
 			)
 		}
 	}()
@@ -132,6 +138,7 @@ func (s *Cron) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.cron.Start()
 	s.started = true
+	s.log.Info("scheduler started", logger.Int("jobs", len(s.entries)))
 	return nil
 }
 
@@ -151,8 +158,10 @@ func (s *Cron) Stop(ctx context.Context) error {
 
 	select {
 	case <-done.Done():
+		s.log.Info("scheduler stopped")
 		return nil
 	case <-ctx.Done():
+		s.log.Warn("scheduler stop timeout", logger.Int("jobs", len(s.entries)))
 		return ctx.Err()
 	}
 }
