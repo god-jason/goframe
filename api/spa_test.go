@@ -1,4 +1,4 @@
-package router
+package api
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 func newSPAEngine(t *testing.T) *gin.Engine {
@@ -75,7 +74,7 @@ func TestSPAUnknownAPIReturnsJSON404(t *testing.T) {
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d", recorder.Code)
 	}
-	var body response.Response[any]
+	var body Response[any]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestSPARejectsUnsupportedMethod(t *testing.T) {
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d", recorder.Code)
 	}
-	var body response.Response[any]
+	var body Response[any]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}

@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // Register 按当前配置注册系统信息接口。未启用时不做任何注册。
@@ -43,7 +43,7 @@ func snapshotHandler(cfg Config) gin.HandlerFunc {
 			writeError(c, err)
 			return
 		}
-		response.Success(c, value)
+		api.Success(c, value)
 	}
 }
 
@@ -58,7 +58,7 @@ func cpuHandler(cfg Config) gin.HandlerFunc {
 			writeError(c, err)
 			return
 		}
-		response.Success(c, value)
+		api.Success(c, value)
 	}
 }
 
@@ -73,7 +73,7 @@ func memoryHandler(cfg Config) gin.HandlerFunc {
 			writeError(c, err)
 			return
 		}
-		response.Success(c, value)
+		api.Success(c, value)
 	}
 }
 
@@ -88,17 +88,17 @@ func diskHandler(cfg Config) gin.HandlerFunc {
 			writeError(c, err)
 			return
 		}
-		response.Success(c, value)
+		api.Success(c, value)
 	}
 }
 
 // writeError 把采集错误转换为统一响应，不向客户端暴露系统细节。
 func writeError(c *gin.Context, err error) {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(c.Request.Context().Err(), context.DeadlineExceeded) {
-		response.Fail(c, apperrors.Timeout())
+		api.Fail(c, apperrors.Timeout())
 		return
 	}
-	response.Fail(c, apperrors.Unavailable("system metrics unavailable").WithCause(err))
+	api.Fail(c, apperrors.Unavailable("system metrics unavailable").WithCause(err))
 }
 
 // normalizePath 补全前导斜杠并去掉尾部斜杠。

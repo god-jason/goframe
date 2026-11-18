@@ -68,7 +68,12 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		shutdown(stderr)
 		return 1
 	}
-	module.RegisterRoutes(web.API())
+	// 业务模块登记的接口在这里统一挂载到 web。
+	if err := module.Mount(web.API()); err != nil {
+		fmt.Fprintf(stderr, "mount module apis: %v\n", err)
+		shutdown(stderr)
+		return 1
+	}
 
 	// HTTP 服务最后启动，阻塞到收到退出信号或服务异常。
 	if err := web.Run(ctx); err != nil {

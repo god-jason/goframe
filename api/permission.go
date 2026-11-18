@@ -1,4 +1,4 @@
-package middleware
+package api
 
 import (
 	"github.com/gin-gonic/gin"
@@ -6,7 +6,6 @@ import (
 	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/permission"
-	"github.com/god-jason/goframe/response"
 )
 
 // ResourceFunc 根据请求解析授权资源。
@@ -18,11 +17,11 @@ func RequirePermission(authorizer permission.Authorizer, action string, resource
 	return func(c *gin.Context) {
 		identity, ok := auth.FromGin(c)
 		if !ok {
-			response.Fail(c, apperrors.Unauthorized("authentication required"))
+			Fail(c, apperrors.Unauthorized("authentication required"))
 			return
 		}
 		if authorizer == nil {
-			response.Fail(c, apperrors.PermissionDenied())
+			Fail(c, apperrors.PermissionDenied())
 			return
 		}
 
@@ -31,7 +30,7 @@ func RequirePermission(authorizer permission.Authorizer, action string, resource
 			resource = resourceFn(c)
 		}
 		if err := authorizer.Check(c.Request.Context(), permission.SubjectFromIdentity(identity), action, resource); err != nil {
-			response.Fail(c, err)
+			Fail(c, err)
 			return
 		}
 		c.Next()

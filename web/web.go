@@ -18,6 +18,7 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/cache"
 	"github.com/god-jason/goframe/config"
@@ -29,8 +30,6 @@ import (
 	"github.com/god-jason/goframe/middleware"
 	"github.com/god-jason/goframe/monitor"
 	"github.com/god-jason/goframe/openapi"
-	"github.com/god-jason/goframe/response"
-	"github.com/god-jason/goframe/router"
 	"github.com/god-jason/goframe/security/csrf"
 	"github.com/god-jason/goframe/security/ratelimit"
 	"github.com/god-jason/goframe/sysinfo"
@@ -57,7 +56,7 @@ var (
 
 	global = struct {
 		engine  *gin.Engine
-		router  *router.Router
+		router  *api.Router
 		server  *Server
 		health  *health.Checker
 		metrics *monitor.Metrics
@@ -88,7 +87,7 @@ func Engine() *gin.Engine {
 }
 
 // Router 返回路由封装。
-func Router() *router.Router {
+func Router() *api.Router {
 	return global.router
 }
 
@@ -144,11 +143,11 @@ func Startup(ctx context.Context) error {
 	if err := setupMiddleware(engine, *cfg); err != nil {
 		return err
 	}
-	api := router.New(engine, router.Options{
+	apiRouter := api.New(engine, api.Options{
 		APIPrefix:  cfg.APIPrefix,
 		APIVersion: cfg.APIVersion,
 	})
-	_ = api
+	_ = apiRouter
 
 	checker := health.New(config.App().Version)
 	checker.SetLogger(logger.Get())
@@ -192,7 +191,7 @@ func Startup(ctx context.Context) error {
 	}
 
 	global.engine = engine
-	global.router = api
+	global.router = apiRouter
 	global.health = checker
 	global.metrics = metrics
 	global.server = httpServer
@@ -292,10 +291,10 @@ func setupMiddleware(engine *gin.Engine, cfg Config) error {
 }
 
 func setupNoRoute(engine *gin.Engine, cfg Config) error {
-	spaCfg := router.SPA()
+	spaCfg := api.SPA()
 	if !spaCfg.Enabled {
 		engine.NoRoute(func(c *gin.Context) {
-			response.Fail(c, apperrors.NotFound("route not found"))
+			api.Fail(c, apperrors.NotFound("route not found"))
 		})
 		return nil
 	}
@@ -313,7 +312,7 @@ func setupNoRoute(engine *gin.Engine, cfg Config) error {
 		return fmt.Errorf("unsupported spa mode %q", spaCfg.Mode)
 	}
 
-	handler, err := router.NewSPAHandler(fsys, apiBasePath(cfg), router.SPAOptions{Index: spaCfg.Index})
+	handler, err := api.NewSPAHandler(fsys, apiBasePath(cfg), api.SPAOptions{Index: spaCfg.Index})
 	if err != nil {
 		return err
 	}

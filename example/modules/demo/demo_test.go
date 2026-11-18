@@ -145,7 +145,9 @@ func TestModuleInitAndRoutes(t *testing.T) {
 	}
 
 	router := gin.New()
-	module.RegisterRoutes(router)
+	if err := module.Mount(router); err != nil {
+		t.Fatalf("mount: %v", err)
+	}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/public/ping", nil))
 	if recorder.Code != http.StatusOK {
@@ -274,7 +276,9 @@ func TestMemoryUserRepository(t *testing.T) {
 func TestHandlerRoutes(t *testing.T) {
 	handler := newTestHandler(t)
 	router := gin.New()
-	handler.RegisterRoutes(router)
+	if err := handler.Mount(router); err != nil {
+		t.Fatalf("mount: %v", err)
+	}
 
 	do := func(method, path, body, token string) *httptest.ResponseRecorder {
 		var reader io.Reader
@@ -358,7 +362,9 @@ func TestHandlerCSRFProtection(t *testing.T) {
 	handler.csrf = protector
 
 	router := gin.New()
-	handler.RegisterRoutes(router)
+	if err := handler.Mount(router); err != nil {
+		t.Fatalf("mount: %v", err)
+	}
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/public/csrf-token", nil))
 	if recorder.Code != http.StatusOK {

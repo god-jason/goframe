@@ -1,8 +1,10 @@
-package middleware
+package api
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +13,16 @@ import (
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/permission"
 )
+
+func doRequest(engine *gin.Engine, method, target string, body io.Reader, headers map[string]string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, body)
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, req)
+	return recorder
+}
 
 type stubAuthenticator struct {
 	identity *auth.Identity

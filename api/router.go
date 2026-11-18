@@ -1,5 +1,4 @@
-// Package router 负责 API 路由分组与注册。
-package router
+package api
 
 import (
 	"strings"

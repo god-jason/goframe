@@ -35,10 +35,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
+	"github.com/god-jason/goframe/api"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/id"
 	"github.com/god-jason/goframe/logger"
-	"github.com/god-jason/goframe/response"
 )
 
 // Options 是 Hub 配置。
@@ -154,7 +154,7 @@ func NewHub(opts Options) *Hub {
 func (h *Hub) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if h.closed.Load() {
-			response.Fail(c, apperrors.Unavailable("websocket hub is closed"))
+			api.Fail(c, apperrors.Unavailable("websocket hub is closed"))
 			return
 		}
 
@@ -162,12 +162,12 @@ func (h *Hub) Handler() gin.HandlerFunc {
 		if h.opts.Authenticate != nil {
 			authenticated, err := h.opts.Authenticate(c)
 			if err != nil {
-				response.Fail(c, err)
+				api.Fail(c, err)
 				return
 			}
 			subject = authenticated
 		} else if !h.opts.AllowAnonymous {
-			response.Fail(c, apperrors.Unauthorized("websocket authentication required"))
+			api.Fail(c, apperrors.Unauthorized("websocket authentication required"))
 			return
 		}
 		if subject == "" {

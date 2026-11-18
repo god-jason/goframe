@@ -3,9 +3,9 @@ package middleware
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 	"github.com/god-jason/goframe/security/ratelimit"
 )
 
@@ -26,12 +26,12 @@ func RateLimit(limiter ratelimit.Limiter, keyFunc func(*gin.Context) string, fai
 				c.Next()
 				return
 			}
-			response.Fail(c, apperrors.Unavailable("rate limiter unavailable"))
+			api.Fail(c, apperrors.Unavailable("rate limiter unavailable"))
 			return
 		}
 		if !allowed {
 			c.Header("Retry-After", "1")
-			response.Fail(c, apperrors.TooManyRequests("too many requests"))
+			api.Fail(c, apperrors.TooManyRequests("too many requests"))
 			return
 		}
 		c.Next()

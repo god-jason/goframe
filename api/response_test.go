@@ -1,4 +1,4 @@
-package response
+package api
 
 import (
 	"encoding/json"
@@ -14,9 +14,11 @@ import (
 	apperrors "github.com/god-jason/goframe/errors"
 )
 
-func newTestEngine() *gin.Engine {
+func newTestEngine(middlewares ...gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	return gin.New()
+	engine := gin.New()
+	engine.Use(middlewares...)
+	return engine
 }
 
 func perform(e *gin.Engine, method, target string) *httptest.ResponseRecorder {

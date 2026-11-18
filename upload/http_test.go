@@ -11,8 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/auth"
-	"github.com/god-jason/goframe/response"
 )
 
 func TestHandlerUploadsFile(t *testing.T) {
@@ -47,7 +47,7 @@ func TestHandlerUploadsFile(t *testing.T) {
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	var result response.Response[Result]
+	var result api.Response[Result]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}

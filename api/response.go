@@ -1,5 +1,4 @@
-// Package response 定义统一响应格式、分页与响应写入工具。
-package response
+package api
 
 import (
 	"net/http"

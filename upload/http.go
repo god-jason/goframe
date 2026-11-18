@@ -3,9 +3,9 @@ package upload
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // HTTPOptions 是上传接口配置。
@@ -37,17 +37,17 @@ func (s *Service) Handler(opts HTTPOptions) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		fileHeader, err := c.FormFile(field)
 		if err != nil {
-			response.Fail(c, apperrors.Validation("file is required").WithCause(err))
+			api.Fail(c, apperrors.Validation("file is required").WithCause(err))
 			return
 		}
 		if fileHeader.Size > s.maxSize {
-			response.Fail(c, apperrors.PayloadTooLarge())
+			api.Fail(c, apperrors.PayloadTooLarge())
 			return
 		}
 
 		file, err := fileHeader.Open()
 		if err != nil {
-			response.Fail(c, apperrors.BadRequest("open uploaded file failed").WithCause(err))
+			api.Fail(c, apperrors.BadRequest("open uploaded file failed").WithCause(err))
 			return
 		}
 		defer func() { _ = file.Close() }()
@@ -71,9 +71,9 @@ func (s *Service) Handler(opts HTTPOptions) gin.HandlerFunc {
 
 		result, err := s.Save(c.Request.Context(), tenantID, category, fileHeader.Filename, file)
 		if err != nil {
-			response.Fail(c, err)
+			api.Fail(c, err)
 			return
 		}
-		response.Created(c, result)
+		api.Created(c, result)
 	}
 }

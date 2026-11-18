@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/auth"
 	"github.com/god-jason/goframe/logger"
-	"github.com/god-jason/goframe/response"
 	"github.com/god-jason/goframe/trace"
 )
 
@@ -32,7 +32,7 @@ func AccessLog(log logger.Logger, skipPaths ...string) gin.HandlerFunc {
 		}
 
 		fields := []logger.Field{
-			logger.String("request_id", response.RequestID(c)),
+			logger.String("request_id", api.RequestID(c)),
 			logger.String("method", c.Request.Method),
 			logger.String("path", path),
 			logger.String("route", route),

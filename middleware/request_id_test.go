@@ -6,18 +6,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/response"
+	"github.com/god-jason/goframe/api"
 )
 
 func TestRequestIDPreservesValidValue(t *testing.T) {
 	engine := newTestEngine(RequestID())
-	engine.GET("/", func(c *gin.Context) { c.String(http.StatusOK, response.RequestID(c)) })
+	engine.GET("/", func(c *gin.Context) { c.String(http.StatusOK, api.RequestID(c)) })
 
-	recorder := doRequest(engine, http.MethodGet, "/", nil, map[string]string{response.HeaderRequestID: "req-123.abc"})
+	recorder := doRequest(engine, http.MethodGet, "/", nil, map[string]string{api.HeaderRequestID: "req-123.abc"})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d", recorder.Code)
 	}
-	if got := recorder.Header().Get(response.HeaderRequestID); got != "req-123.abc" {
+	if got := recorder.Header().Get(api.HeaderRequestID); got != "req-123.abc" {
 		t.Fatalf("response request id = %q", got)
 	}
 	if recorder.Body.String() != "req-123.abc" {
@@ -27,12 +27,12 @@ func TestRequestIDPreservesValidValue(t *testing.T) {
 
 func TestRequestIDReplacesInvalidValue(t *testing.T) {
 	engine := newTestEngine(RequestID())
-	engine.GET("/", func(c *gin.Context) { c.String(http.StatusOK, response.RequestID(c)) })
+	engine.GET("/", func(c *gin.Context) { c.String(http.StatusOK, api.RequestID(c)) })
 
 	recorder := doRequest(engine, http.MethodGet, "/", nil, map[string]string{
-		response.HeaderRequestID: "<script>alert(1)</script>",
+		api.HeaderRequestID: "<script>alert(1)</script>",
 	})
-	got := recorder.Header().Get(response.HeaderRequestID)
+	got := recorder.Header().Get(api.HeaderRequestID)
 	if got == "" || got == "<script>alert(1)</script>" {
 		t.Fatalf("invalid request id was not replaced: %q", got)
 	}

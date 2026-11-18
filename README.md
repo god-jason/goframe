@@ -80,9 +80,8 @@ goframe/
 ├── bootstrap/      # 汇总导入全部标准组件
 ├── config/         # 配置段注册、加载、环境变量覆盖、热更新
 ├── web/            # HTTP Server、TLS、Gin 引擎装配、中间件、健康检查、指标、pprof
-├── router/         # API 路由分组、SPA 托管
-├── middleware/     # RequestID、Recovery、日志、CORS、安全、认证、限流、CSRF
-├── response/       # 统一响应、分页、写入工具
+├── api/            # 接口注册与挂载、统一响应、分页、路由分组、SPA 托管、认证/租户/权限守卫（原 response、router 包已并入）
+├── middleware/     # RequestID、Recovery、日志、CORS、安全、限流、CSRF
 ├── errors/         # 稳定错误码与 AppError
 ├── auth/           # Identity、JWT、API Key、TOTP、Session/RefreshToken、GORM 仓库、OIDC
 ├── license/        # 离线签名许可、功能授权、配额、机器绑定与吊销
@@ -156,7 +155,7 @@ iot-platform/
 | 层 | 职责 | 当前实现 |
 |---|---|---|
 | Application | 组件启动注册、依赖拓扑、全局实例、配置段注册 | `boot/`、`config/`、`bootstrap/` |
-| Interface | HTTP 引擎装配、路由、中间件、Handler、DTO | `web/`、`router/`、`middleware/`、`response/` |
+| Interface | HTTP 引擎装配、路由、中间件、Handler、DTO | `web/`、`api/`、`middleware/` |
 | Business | Service、Domain、Repository 接口、业务事件、业务校验 | 业务项目 `internal/modules/*` |
 | Infrastructure | GORM Repository、数据库、缓存、存储、日志、调度、事件、加密 | `database/`、`cache/`、`storage/`、`logger/`、`scheduler/`、`event/`、`security/` |
 | Runtime | 配置、TLS、健康检查、指标、优雅退出 | `config/`、`web/`、`health/`、`monitor/` |
@@ -442,7 +441,7 @@ type PageData[T any] struct {
 最大 `page_size` 由框架限制为 100；排序字段必须使用白名单映射，不允许将用户输入直接拼接进 SQL。
 
 ```go
-query := response.PageQuery{Page: 1, PageSize: 20, Sort: "created_at", Order: "desc"}
+query := api.PageQuery{Page: 1, PageSize: 20, Sort: "created_at", Order: "desc"}
 query.Normalize()
 column, direction := query.SortClause(map[string]string{
     "created_at": "created_at",
@@ -474,9 +473,9 @@ RequestID → Recovery → Security Headers → Method Filter → CORS
 
 ```go
 protected := api.Group("",
-    middleware.Authenticate(auth.Get()),
-    middleware.RequireAuth(),
-    middleware.Tenant(tenantResolver),
+    api.Authenticate(auth.Get()),
+    api.RequireAuth(),
+    api.Tenant(tenantResolver),
 )
 ```
 

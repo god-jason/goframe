@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/response"
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/security/csrf"
 )
 
@@ -32,7 +32,7 @@ func CSRF(protector *csrf.Protector) gin.HandlerFunc {
 			return
 		}
 		if err := protector.Validate(c); err != nil {
-			response.Fail(c, err)
+			api.Fail(c, err)
 			return
 		}
 		c.Next()

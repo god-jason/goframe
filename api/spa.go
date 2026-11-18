@@ -1,4 +1,4 @@
-package router
+package api
 
 import (
 	"io/fs"
@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // SPAOptions 是单页应用托管选项。
@@ -38,13 +37,13 @@ func NewSPAHandler(fsys fs.FS, apiPath string, opts SPAOptions) (gin.HandlerFunc
 
 	return func(c *gin.Context) {
 		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
-			response.Fail(c, apperrors.New(apperrors.CodeMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed"))
+			Fail(c, apperrors.New(apperrors.CodeMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed"))
 			return
 		}
 
 		requestPath := c.Request.URL.Path
 		if isAPIPath(requestPath, apiPath) {
-			response.Fail(c, apperrors.NotFound("route not found"))
+			Fail(c, apperrors.NotFound("route not found"))
 			return
 		}
 

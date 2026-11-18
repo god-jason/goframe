@@ -1,4 +1,4 @@
-package middleware
+package api
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 
 	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // Authenticate 解析可选的身份令牌。令牌缺失时放行，令牌非法时返回 401。
@@ -19,7 +18,7 @@ func Authenticate(authenticator auth.Authenticator) gin.HandlerFunc {
 		if apiKey := strings.TrimSpace(c.GetHeader(auth.HeaderAPIKey)); apiKey != "" {
 			identity, err := auth.VerifyAPIKey(c.Request.Context(), apiKey)
 			if err != nil {
-				response.Fail(c, err)
+				Fail(c, err)
 				return
 			}
 			setIdentity(c, identity)
@@ -35,7 +34,7 @@ func Authenticate(authenticator auth.Authenticator) gin.HandlerFunc {
 		if strings.HasPrefix(token, auth.APIKeyPrefix) {
 			identity, err := auth.VerifyAPIKey(c.Request.Context(), token)
 			if err != nil {
-				response.Fail(c, err)
+				Fail(c, err)
 				return
 			}
 			setIdentity(c, identity)
@@ -49,7 +48,7 @@ func Authenticate(authenticator auth.Authenticator) gin.HandlerFunc {
 
 		identity, err := authenticator.Authenticate(c.Request.Context(), token)
 		if err != nil {
-			response.Fail(c, err)
+			Fail(c, err)
 			return
 		}
 		setIdentity(c, identity)
@@ -61,7 +60,7 @@ func Authenticate(authenticator auth.Authenticator) gin.HandlerFunc {
 func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, ok := auth.FromGin(c); !ok {
-			response.Fail(c, apperrors.Unauthorized("authentication required"))
+			Fail(c, apperrors.Unauthorized("authentication required"))
 			return
 		}
 		c.Next()
@@ -96,16 +95,16 @@ func Tenant(resolver TenantResolver) gin.HandlerFunc {
 		}
 
 		if resolver == nil {
-			response.Fail(c, apperrors.New(apperrors.CodeTenantDenied, http.StatusForbidden, "tenant access denied"))
+			Fail(c, apperrors.New(apperrors.CodeTenantDenied, http.StatusForbidden, "tenant access denied"))
 			return
 		}
 		member, err := resolver.IsMember(c.Request.Context(), identity.UserID, tenantID)
 		if err != nil {
-			response.Fail(c, err)
+			Fail(c, err)
 			return
 		}
 		if !member {
-			response.Fail(c, apperrors.New(apperrors.CodeTenantDenied, http.StatusForbidden, "tenant access denied"))
+			Fail(c, apperrors.New(apperrors.CodeTenantDenied, http.StatusForbidden, "tenant access denied"))
 			return
 		}
 

@@ -6,20 +6,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/id"
-	"github.com/god-jason/goframe/response"
 )
 
 // RequestID 为每个请求生成或校验 X-Request-ID。
 // 客户端提供的 Request ID 必须校验格式和长度，不作为身份凭证。
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestID := strings.TrimSpace(c.GetHeader(response.HeaderRequestID))
+		requestID := strings.TrimSpace(c.GetHeader(api.HeaderRequestID))
 		if !validRequestID(requestID) {
 			requestID = id.New()
 		}
-		c.Set(response.RequestIDKey, requestID)
-		c.Header(response.HeaderRequestID, requestID)
+		c.Set(api.RequestIDKey, requestID)
+		c.Header(api.HeaderRequestID, requestID)
 		c.Next()
 	}
 }

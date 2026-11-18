@@ -13,8 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 const (
@@ -138,7 +138,7 @@ func Idempotency(store Store, ttl time.Duration) gin.HandlerFunc {
 			return
 		}
 		if len(key) > maxIdempotencyKeyLength {
-			response.Fail(c, apperrors.BadRequest("idempotency key is too long"))
+			api.Fail(c, apperrors.BadRequest("idempotency key is too long"))
 			return
 		}
 
@@ -148,14 +148,14 @@ func Idempotency(store Store, ttl time.Duration) gin.HandlerFunc {
 		record, err := store.Get(ctx, key)
 		if err != nil {
 			unlock()
-			response.Fail(c, apperrors.Unavailable("idempotency store unavailable"))
+			api.Fail(c, apperrors.Unavailable("idempotency store unavailable"))
 			return
 		}
 		if record != nil {
 			unlock()
 			if record.InProgress {
 				c.Header("Retry-After", "1")
-				response.Fail(c, apperrors.Conflict("a request with the same idempotency key is in progress"))
+				api.Fail(c, apperrors.Conflict("a request with the same idempotency key is in progress"))
 				return
 			}
 			replayRecord(c, record)
@@ -167,7 +167,7 @@ func Idempotency(store Store, ttl time.Duration) gin.HandlerFunc {
 			InProgress: true,
 		}, ttl); err != nil {
 			unlock()
-			response.Fail(c, apperrors.Unavailable("idempotency store unavailable"))
+			api.Fail(c, apperrors.Unavailable("idempotency store unavailable"))
 			return
 		}
 		unlock()

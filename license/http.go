@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // Register 注册许可状态查询接口。未启用或路径为空时不做任何注册。
@@ -24,11 +24,11 @@ func RequireValid() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		manager := Get()
 		if manager == nil {
-			response.Fail(c, apperrors.Unavailable("license is not loaded"))
+			api.Fail(c, apperrors.Unavailable("license is not loaded"))
 			return
 		}
 		if !manager.Valid() {
-			response.Fail(c, apperrors.Forbidden("license is not valid"))
+			api.Fail(c, apperrors.Forbidden("license is not valid"))
 			return
 		}
 		c.Next()
@@ -42,11 +42,11 @@ func RequireFeature(feature string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		manager := Get()
 		if manager == nil {
-			response.Fail(c, apperrors.Forbidden("license does not include feature: "+feature))
+			api.Fail(c, apperrors.Forbidden("license does not include feature: "+feature))
 			return
 		}
 		if !manager.HasFeature(feature) {
-			response.Fail(c, apperrors.Forbidden("license does not include feature: "+feature))
+			api.Fail(c, apperrors.Forbidden("license does not include feature: "+feature))
 			return
 		}
 		c.Next()
@@ -58,10 +58,10 @@ func statusHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		manager := Get()
 		if manager == nil {
-			response.Fail(c, apperrors.Unavailable("license is not loaded"))
+			api.Fail(c, apperrors.Unavailable("license is not loaded"))
 			return
 		}
-		response.Success(c, manager.Snapshot())
+		api.Success(c, manager.Snapshot())
 	}
 }
 

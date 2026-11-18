@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // SecurityHeaders 设置安全响应头。
@@ -47,12 +47,12 @@ func MethodFilter(allowed []string) gin.HandlerFunc {
 		method := c.Request.Method
 		if method == http.MethodTrace || method == http.MethodConnect {
 			c.Header("Allow", allowHeader)
-			response.Fail(c, apperrors.New(apperrors.CodeMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed"))
+			api.Fail(c, apperrors.New(apperrors.CodeMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed"))
 			return
 		}
 		if _, ok := set[method]; !ok {
 			c.Header("Allow", allowHeader)
-			response.Fail(c, apperrors.New(apperrors.CodeMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed"))
+			api.Fail(c, apperrors.New(apperrors.CodeMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed"))
 			return
 		}
 		c.Next()
@@ -64,13 +64,13 @@ func RequestLimits(cfg RequestConfig) gin.HandlerFunc {
 	maxBody := cfg.MaxBodySize.Bytes()
 	return func(c *gin.Context) {
 		if cfg.MaxQueryLength > 0 && len(c.Request.URL.RawQuery) > cfg.MaxQueryLength {
-			response.Fail(c, apperrors.BadRequest("query string too long"))
+			api.Fail(c, apperrors.BadRequest("query string too long"))
 			return
 		}
 
 		if maxBody > 0 {
 			if c.Request.ContentLength > maxBody {
-				response.Fail(c, apperrors.PayloadTooLarge())
+				api.Fail(c, apperrors.PayloadTooLarge())
 				return
 			}
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
@@ -83,7 +83,7 @@ func RequestLimits(cfg RequestConfig) gin.HandlerFunc {
 				if hasBody {
 					contentType := c.ContentType()
 					if contentType != "application/json" && !strings.HasSuffix(contentType, "+json") {
-						response.Fail(c, apperrors.New(apperrors.CodeBadRequest, http.StatusUnsupportedMediaType, "content-type must be application/json"))
+						api.Fail(c, apperrors.New(apperrors.CodeBadRequest, http.StatusUnsupportedMediaType, "content-type must be application/json"))
 						return
 					}
 				}

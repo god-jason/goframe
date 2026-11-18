@@ -11,8 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/response"
 )
 
 // Timeout 为请求上下文设置超时。
@@ -61,10 +61,10 @@ func Timeout(d time.Duration) gin.HandlerFunc {
 
 // timeoutPayload 生成超时响应体，保持与统一响应格式一致。
 func timeoutPayload(c *gin.Context) []byte {
-	data, err := json.Marshal(response.Response[any]{
+	data, err := json.Marshal(api.Response[any]{
 		Code:      apperrors.CodeUnavailable,
 		Message:   "request timeout",
-		RequestID: response.RequestID(c),
+		RequestID: api.RequestID(c),
 	})
 	if err != nil {
 		return []byte(`{"code":50300,"message":"request timeout"}`)

@@ -55,7 +55,7 @@ func (m *Module) Init() error {
 	return nil
 }
 
-// RegisterRoutes 注册模块路由。
-func (m *Module) RegisterRoutes(router gin.IRouter) {
-	m.handler.RegisterRoutes(router)
+// Mount 把本模块登记的接口统一挂载到 web 的 API 分组。
+func (m *Module) Mount(router gin.IRoutes) error {
+	return m.handler.Mount(router)
 }
