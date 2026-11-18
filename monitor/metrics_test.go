@@ -46,3 +46,21 @@ func TestMetricsMiddlewareAndHandler(t *testing.T) {
 		t.Fatal("expected registry")
 	}
 }
+
+func TestMetricsMiddlewareUnmatched(t *testing.T) {
+	metrics := NewMetrics()
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(metrics.Middleware())
+
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/missing", nil))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", recorder.Code)
+	}
+
+	if got := testutil.ToFloat64(metrics.requests.WithLabelValues(http.MethodGet, "unmatched", "404")); got != 1 {
+		t.Fatalf("unmatched counter = %v, want 1", got)
+	}
+}

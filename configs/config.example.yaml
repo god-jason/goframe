@@ -7,6 +7,25 @@ app:
   version: 1.0.0
   environment: development
 
+license:
+  # 企业离线许可；启用后 Strict 为 true 时无效许可会阻断启动
+  enabled: false
+  file: ""
+  # 公钥 PEM 内容或公钥文件路径
+  public_key: ""
+  # 可选的离线吊销列表
+  revocation_file: ""
+  # 许可状态查询接口；留空表示不注册
+  status_path: /license
+  strict: true
+  # 记录最后校验时间，用于检测系统时间回拨
+  state_file: data/license/state.json
+  # 显式指定机器指纹；为空时自动计算
+  fingerprint: ""
+  # 指纹来源优先级：uuid / hostid / disk / cpuid / mac；为空使用默认顺序
+  fingerprint_sources: []
+  clock_tolerance: 5m
+
 server:
   host: 0.0.0.0
   port: 8080
@@ -21,6 +40,29 @@ server:
   trusted_proxies: []
   api_prefix: /api
   api_version: v1
+  # 响应 gzip 压缩
+  compression: true
+  compression_min_size: 1024
+  # 单请求超时；0 表示不限制，pprof 等长请求需保持为 0
+  request_timeout: 0
+
+trace:
+  # OpenTelemetry 链路追踪，默认关闭
+  enabled: false
+  service_name: ""
+  # OTLP 收集器地址
+  endpoint: localhost:4318
+  protocol: http
+  insecure: true
+  sample_ratio: 1.0
+  timeout: 5s
+  batch_timeout: 5s
+  headers: {}
+
+openapi:
+  # swaggo 生成的文档；需运行 swag init 并匿名导入 docs 包
+  enabled: false
+  path: /swagger
 
 database:
   # 留空表示不启用数据库；支持 mysql / postgres
@@ -131,6 +173,10 @@ security:
   upload:
     max_size: 50MB
     scan_enabled: false
+    # scan_enabled 为 true 时使用 clamd INSTREAM 扫描
+    clamav:
+      addr: 127.0.0.1:3310
+      timeout: 30s
     allowed_extensions:
       - .jpg
       - .jpeg
@@ -169,7 +215,7 @@ tls:
     domains: []
     # 留空使用 Let's Encrypt 生产环境；测试可填 Staging Directory URL
     directory_url: ""
-    # http-01 / tls-alpn-01；DNS-01 暂未实现
+    # http-01 / tls-alpn-01 / dns-01；dns-01 需通过 web.SetACMEDNSProvider 注入 DNS 厂商实现
     challenge: http-01
     cache_dir: data/acme
     http_challenge_addr: ":80"
@@ -177,16 +223,48 @@ tls:
     renew_before: 720h
 
 spa:
-  # embed 模式需通过 app.WithFileSystem 注入前端资源
+  # embed 模式需通过 web.WithFileSystem 注入前端资源
   enabled: false
   mode: embed
   path: web/dist
   index: index.html
 
 storage:
+  # local / s3 / minio
   driver: local
   path: data/storage
   base_url: ""
+  # s3 / minio 驱动使用以下配置
+  endpoint: ""
+  bucket: ""
+  region: ""
+  access_key: ${S3_ACCESS_KEY}
+  secret_key: ${S3_SECRET_KEY}
+  use_ssl: true
+  secure: true
+
+pprof:
+  # 在 Web 引擎上注册 pprof 路由（github.com/gin-contrib/pprof），默认关闭
+  enabled: false
+  path: /debug/pprof
+
+sysinfo:
+  # 实时 CPU / 内存 / 磁盘占用接口；请求时采集，不落盘、不保留历史
+  enabled: false
+  path: /system
+  # CPU 使用率采样窗口
+  sample_interval: 300ms
+  timeout: 3s
+
+outbox:
+  # 事务 Outbox：业务在事务内写入事件，后台 relay 投递到进程内 EventBus
+  enabled: false
+  interval: 1s
+  batch_size: 100
+  max_attempts: 10
+  base_delay: 1s
+  max_delay: 1m
+  lease_timeout: 1m
 
 scheduler:
   enabled: true
@@ -251,5 +329,29 @@ websocket:
   send_queue: 256
   # 上行消息处理队列，队列满时关闭慢连接
   inbound_queue: 64
+  # 单连接最多订阅的 topic 数
+  max_topics: 100
   # 关闭匿名时，必须通过 app.WithWebSocketAuthenticator 注入鉴权函数
   allow_anonymous: false
+
+weixin:
+  # 微信公众号与小程序鉴权；AccessToken/Ticket 自动缓存与刷新
+  enabled: false
+  timeout: 10s
+  apps:
+    - name: official
+      type: official
+      app_id: ${WECHAT_APP_ID}
+      app_secret: ${WECHAT_APP_SECRET}
+      # 服务端消息校验 Token 与消息加解密密钥
+      token: ${WECHAT_TOKEN}
+      encoding_aes_key: ${WECHAT_AES_KEY}
+      oauth_redirect: ""
+      default: true
+    - name: mini
+      type: mini
+      app_id: ${WECHAT_MINI_APP_ID}
+      app_secret: ${WECHAT_MINI_APP_SECRET}
+      token: ""
+      encoding_aes_key: ""
+      default: false

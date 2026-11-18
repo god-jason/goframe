@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"sync"
 
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/config"
@@ -14,7 +13,6 @@ import (
 var (
 	cfg    = config.Register("broker", DefaultConfig())
 	global = struct {
-		sync.RWMutex
 		server *Server
 		auth   Authenticator
 		hooks  Hooks
@@ -23,30 +21,24 @@ var (
 
 // SetAuthenticator 注入 CONNECT 阶段鉴权器，必须在 boot.Startup 前调用。
 func SetAuthenticator(auth Authenticator) {
-	global.Lock()
 	global.auth = auth
-	global.Unlock()
 }
 
 // SetHooks 注入 Broker 生命周期与消息回调，必须在 boot.Startup 前调用。
 func SetHooks(hooks Hooks) {
-	global.Lock()
 	global.hooks = hooks
-	global.Unlock()
 }
 
-// Current 返回当前 Broker 配置快照。
-func Current() *Config { return cfg.Get() }
+// GetConfig 返回当前 Broker 配置快照。
+func GetConfig() *Config { return cfg.Get() }
 
 // Get 返回全局 Broker；未启用或未启动时返回 nil。
 func Get() *Server {
-	global.RLock()
-	defer global.RUnlock()
 	return global.server
 }
 
 func init() {
-	_ = boot.Register("broker", &boot.Task{
+	_ = boot.Register("broker", &boot.Module{
 		Startup:  Startup,
 		Shutdown: Shutdown,
 		Depends:  []string{"config", "logger"},
@@ -55,15 +47,13 @@ func init() {
 
 // Startup 创建并启动嵌入式 MQTT Broker。
 func Startup(ctx context.Context) error {
-	current := Current()
+	current := GetConfig()
 	if !current.Enabled {
 		return nil
 	}
 
-	global.RLock()
 	authenticator := global.auth
 	hooks := global.hooks
-	global.RUnlock()
 
 	options := Options{
 		Addr:               current.Addr,
@@ -102,18 +92,14 @@ func Startup(ctx context.Context) error {
 	if err := server.Start(ctx); err != nil {
 		return err
 	}
-	global.Lock()
 	global.server = server
-	global.Unlock()
 	return nil
 }
 
 // Shutdown 关闭 Broker。
 func Shutdown(ctx context.Context) error {
-	global.Lock()
 	server := global.server
 	global.server = nil
-	global.Unlock()
 	if server != nil {
 		return server.Shutdown(ctx)
 	}

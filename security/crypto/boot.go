@@ -11,11 +11,11 @@ import (
 
 var cfg = config.Register("security.encryption", DefaultConfig())
 
-// Current 返回当前加密配置快照。
-func Current() *Config { return cfg.Get() }
+// GetConfig 返回当前加密配置快照。
+func GetConfig() *Config { return cfg.Get() }
 
 func init() {
-	_ = boot.Register("crypto", &boot.Task{
+	_ = boot.Register("crypto", &boot.Module{
 		Startup:  Startup,
 		Shutdown: Shutdown,
 		Depends:  []string{"config"},
@@ -24,7 +24,7 @@ func init() {
 
 // Startup 根据配置初始化加密器。未提供密钥时保持未启用状态。
 func Startup(context.Context) error {
-	current := Current()
+	current := GetConfig()
 	if current.Algorithm != "" && !strings.EqualFold(current.Algorithm, "aes-256-gcm") {
 		return fmt.Errorf("crypto: unsupported algorithm %q", current.Algorithm)
 	}

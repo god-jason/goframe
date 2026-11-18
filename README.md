@@ -78,16 +78,16 @@ curl -s http://localhost:8080/api/v1/system/info -H "Authorization: Bearer <acce
 goframe/
 ├── boot/           # 组件启动注册表（依赖拓扑启动、逆序释放）
 ├── bootstrap/      # 汇总导入全部标准组件
-├── web/            # Gin 引擎、全局中间件、健康检查、HTTP 服务装配
 ├── config/         # 配置段注册、加载、环境变量覆盖、热更新
-├── server/         # HTTP Server 与 TLS
+├── web/            # HTTP Server、TLS、Gin 引擎装配、中间件、健康检查、指标、pprof
 ├── router/         # API 路由分组、SPA 托管
 ├── middleware/     # RequestID、Recovery、日志、CORS、安全、认证、限流、CSRF
 ├── response/       # 统一响应、分页、写入工具
 ├── errors/         # 稳定错误码与 AppError
-├── auth/           # Identity、JWT、密码哈希、Session/RefreshToken
+├── auth/           # Identity、JWT、API Key、TOTP、Session/RefreshToken、GORM 仓库、OIDC
+├── license/        # 离线签名许可、功能授权、配额、机器绑定与吊销
 ├── permission/     # RBAC、策略、租户与资源授权
-├── security/       # crypto / csrf / ratelimit / sanitize / audit / secrets
+├── security/       # crypto / csrf / ratelimit / sanitize / audit / secrets / captcha
 ├── database/       # GORM 封装、事务、健康检查、migrate 迁移工具
 ├── cache/          # Cache 接口、Memory、Redis
 ├── storage/        # Storage 接口、本地存储
@@ -98,12 +98,20 @@ goframe/
 ├── archive/        # 压缩包处理（zip/tar/tar.gz/gz，安全解压）
 ├── scheduler/      # 定时任务接口与 cron 实现
 ├── pool/           # 有界协程池（后台任务）
-├── event/          # 进程内事件总线
+├── event/          # 进程内事件总线 / 事务 Outbox
 ├── mqtt/           # MQTT 客户端（发布/订阅/TLS/重连）
 ├── broker/         # 嵌入式 MQTT Broker（会话/QoS/Retained/Will/鉴权）
 ├── websocket/      # WebSocket Hub（鉴权/Origin/心跳/广播）
+├── weixin/         # 微信公众号 / 小程序鉴权、登录与消息校验
 ├── health/         # 存活/就绪/聚合健康检查
 ├── monitor/        # Prometheus 指标
+├── sysinfo/        # CPU/内存/磁盘实时占用分析
+├── trace/          # OpenTelemetry 链路追踪
+├── openapi/        # swaggo OpenAPI 文档
+├── httpclient/     # HTTP 客户端（重试、熔断、JSON）
+├── lock/           # 分布式锁（Redis / 内存）
+├── notify/         # 通知（SMTP / Webhook / SMS 接口）
+├── i18n/           # 国际化与语言协商
 ├── logger/         # 日志接口与 Zap 实现
 ├── id/             # UUIDv7
 ├── example/        # 示例程序与业务模块（Handler / Service / Repository）
@@ -148,10 +156,10 @@ iot-platform/
 | 层 | 职责 | 当前实现 |
 |---|---|---|
 | Application | 组件启动注册、依赖拓扑、全局实例、配置段注册 | `boot/`、`config/`、`bootstrap/` |
-| Interface | HTTP 引擎装配、路由、中间件、Handler、DTO | `web/`、`server/`、`router/`、`middleware/`、`response/` |
+| Interface | HTTP 引擎装配、路由、中间件、Handler、DTO | `web/`、`router/`、`middleware/`、`response/` |
 | Business | Service、Domain、Repository 接口、业务事件、业务校验 | 业务项目 `internal/modules/*` |
 | Infrastructure | GORM Repository、数据库、缓存、存储、日志、调度、事件、加密 | `database/`、`cache/`、`storage/`、`logger/`、`scheduler/`、`event/`、`security/` |
-| Runtime | 配置、TLS、健康检查、指标、优雅退出 | `config/`、`server/`、`health/`、`monitor/` |
+| Runtime | 配置、TLS、健康检查、指标、优雅退出 | `config/`、`web/`、`health/`、`monitor/` |
 
 ### 依赖规则
 
@@ -181,8 +189,8 @@ iot-platform/
 | 定时任务 | robfig/cron | 已使用 |
 | Metrics | Prometheus | 已使用 |
 | ID | UUIDv7 | 已使用 |
-| 文件存储 | Local / S3 / MinIO | Local 已实现，S3/MinIO 规划 |
-| 文件上传 | 标准库 + Magic Number | 已实现 |
+| 文件存储 | Local / S3 / MinIO | 已实现（minio-go） |
+| 文件上传 | 标准库 + Magic Number + ClamAV | 已实现 |
 | 图片处理 | image + golang.org/x/image | 已实现 |
 | Excel | xuri/excelize + extrame/xls | 已实现 |
 | PDF | signintech/gopdf | 已实现（生成） |
@@ -191,10 +199,14 @@ iot-platform/
 | 组件生命周期 | 内置 boot 注册表 | 已实现 |
 | MQTT 客户端 | eclipse/paho.mqtt.golang | 已实现 |
 | MQTT Broker | 标准库 net + 自定义协议编解码 | 已实现 |
-| WebSocket | gorilla/websocket | 已实现 |
-| TLS/ACME | 标准库 TLS / autocert | file 与 acme 已实现，DNS-01 规划 |
-| API 文档 | OpenAPI / swaggo | 规划 |
-| Trace | OpenTelemetry | 规划 |
+| WebSocket | gorilla/websocket + topic 协议 | 已实现 |
+| TLS/ACME | 标准库 TLS / autocert / lego | HTTP-01、TLS-ALPN-01、DNS-01 已实现 |
+| API 文档 | swaggo + gin-swagger | 已实现 |
+| Trace | OpenTelemetry OTLP | 已实现 |
+| API Key | 内置（哈希存储、作用域） | 已实现 |
+| 分布式锁 | Redis SET NX + Lua 解锁 | 已实现 |
+| 可靠事件 | GORM Outbox + 进程内 EventBus | 已实现 |
+| 限流 | 进程内令牌桶 / Redis 分布式 | 已实现 |
 
 框架不强制所有依赖必须启用。Redis、对象存储、消息队列等均采用可选适配器。
 
@@ -230,11 +242,11 @@ iot-platform/
 // cache/config.go
 var cfg = config.Register("redis", DefaultConfig())
 
-func Current() *Config { return cfg.Get() }
+func GetConfig() *Config { return cfg.Get() }
 
 // cache/boot.go
 func init() {
-    _ = boot.Register("cache", &boot.Task{
+    _ = boot.Register("cache", &boot.Module{
         Startup:  Startup,
         Shutdown: Shutdown,
         Depends:  []string{"config"},
@@ -783,7 +795,7 @@ detail / created_at
 - 生产环境关闭 Debug，禁止默认 JWT Secret。
 - 配置文件不提交真实 Secret。
 - 服务使用非 root 运行；容器限制 CPU、内存和文件系统权限。
-- 关闭不必要的 pprof。
+- pprof 默认关闭；排障时临时开启并限制访问来源，用完立即关闭。
 - 后台 goroutine 必须受 Context 管理，并具备 panic 隔离。
 - Recovery 记录堆栈，但不向客户端返回堆栈。
 - 使用 `govulncheck` 检查依赖漏洞，生成 SBOM 并固定依赖版本。
@@ -806,7 +818,7 @@ func DefaultConfig() Config { return Config{Level: "info", Output: "logs/app.log
 // logger/boot.go
 var cfg = config.Register("logger", DefaultConfig())
 
-func Current() *Config { return cfg.Get() }
+func GetConfig() *Config { return cfg.Get() }
 ```
 
 加载时，框架把 YAML 中同名节点解码到每个包的独立副本，再原子替换当前快照；读取方始终拿到不可变配置。
@@ -1294,6 +1306,252 @@ Prometheus 指标：
 
 Metrics 和健康检查接口不得无保护地暴露到公网；建议通过内网、网关或访问控制限制。
 
+### 性能分析（pprof）
+
+Web 引擎内置 [gin-contrib/pprof](https://github.com/gin-contrib/pprof)，默认关闭；启用后在业务端口上注册分析路由：
+
+```yaml
+pprof:
+  enabled: true
+  path: /debug/pprof
+```
+
+```text
+GET /debug/pprof/            # 分析索引
+GET /debug/pprof/cmdline     # 启动参数
+GET /debug/pprof/profile     # CPU profile，默认 30s
+GET /debug/pprof/trace       # 执行追踪
+GET /debug/pprof/symbol      # 符号解析
+GET /debug/pprof/allocs      # 内存分配
+GET /debug/pprof/block       # 阻塞
+GET /debug/pprof/goroutine   # goroutine
+GET /debug/pprof/heap        # 堆内存
+GET /debug/pprof/mutex       # 锁竞争
+GET /debug/pprof/threadcreate
+```
+
+- 采集方式：`go tool pprof http://localhost:8080/debug/pprof/profile`。
+- pprof 路由与业务共用端口，会经过全局中间件（日志、限流、CSRF 等）；生产环境只在排障期间临时开启，并通过网关或访问控制限制来源。
+- 通过 `web.PProf()` 获取当前配置。
+
+### 系统资源实时分析（sysinfo）
+
+基于 `shirou/gopsutil` 提供 CPU、内存、磁盘占用的实时查询，默认关闭；数据仅在请求时采集，不落盘、不保留历史：
+
+```yaml
+sysinfo:
+  enabled: true
+  path: /system
+  sample_interval: 300ms
+  timeout: 3s
+```
+
+```text
+GET /system           # 完整快照（主机、CPU、内存、磁盘）
+GET /system/cpu       # CPU 总使用率、每核使用率、核心数、负载
+GET /system/memory    # 物理内存与 Swap
+GET /system/disk      # 各分区容量、使用率与 inode
+```
+
+- 返回结构与统一响应一致，数据在 `data` 字段中。
+- 单次 CPU 采集会阻塞 `sample_interval`，超时由 `sysinfo.timeout` 控制。
+- 接口会暴露主机信息，生产环境建议通过网关、内网或认证中间件限制访问来源。
+
+### 企业许可（license）
+
+基于 Ed25519 的离线签名许可，运行时只需公钥即可校验，无需联网激活：
+
+- **有效期**：`not_before` / `expires_at`，支持到期后的宽限期。
+- **功能授权**：`features` 列表，支持 `*` 全量授权。
+- **配额**：`limits` 键值对，`-1` 表示不限制。
+- **机器绑定**：`machines` 存放机器指纹；默认按 `uuid > hostid > disk > cpuid > mac` 优先级取第一个可用来源，MAC 仅作兜底并过滤虚拟网卡与随机地址。
+- **指纹诊断**：`go run ./cmd/license fingerprint` 查看各来源与最终指纹。
+- **吊销**：离线吊销列表，由同一私钥签发。
+- **防回拨**：`state_file` 记录最后校验时间，检测系统时钟回拨。
+- **严格模式**：`strict: true` 时无效许可阻断启动。
+
+```yaml
+license:
+  enabled: true
+  file: data/license/license.json
+  public_key: keys/public.pem
+  revocation_file: data/license/revocation.json
+  status_path: /license
+  strict: true
+  state_file: data/license/state.json
+  fingerprint: ""
+  fingerprint_sources: []   # 可选：uuid / hostid / disk / cpuid / mac
+  clock_tolerance: 5m
+```
+
+签发与检查：
+
+```bash
+go run ./cmd/license keygen -dir keys
+go run ./cmd/license issue -key keys/private.pem -id L-001 -product goframe \
+  -customer ACME -edition enterprise -features sso,audit \
+  -limits users=100,devices=50 -expires 2027-12-31T23:59:59Z -grace 720h \
+  -machines <fingerprint> -out data/license/license.json
+go run ./cmd/license inspect -public keys/public.pem -license data/license/license.json
+go run ./cmd/license fingerprint
+go run ./cmd/license revoke -key keys/private.pem -ids L-001 -out data/license/revocation.json
+```
+
+业务路由授权：
+
+```go
+api.GET("/sso/config", license.RequireFeature("sso"), handler)
+api.GET("/billing", license.RequireValid(), handler)
+
+if license.Get().WithinLimit("users", currentUsers) {
+    // 允许新增用户
+}
+```
+
+```text
+GET /license   # 状态、有效期、功能与配额快照
+```
+
+许可状态查询接口会暴露客户与授权信息，生产环境应通过认证中间件或网关限制访问。
+
+### 微信鉴权（weixin）
+
+支持多公众号/多小程序，AccessToken 与 JSAPI Ticket 自动缓存、提前刷新，并在令牌失效时自动重试：
+
+```yaml
+weixin:
+  enabled: true
+  timeout: 10s
+  apps:
+    - name: official
+      type: official
+      app_id: ${WECHAT_APP_ID}
+      app_secret: ${WECHAT_APP_SECRET}
+      token: ${WECHAT_TOKEN}
+      encoding_aes_key: ${WECHAT_AES_KEY}
+      oauth_redirect: https://example.com/oauth/callback
+      default: true
+    - name: mini
+      type: mini
+      app_id: ${WECHAT_MINI_APP_ID}
+      app_secret: ${WECHAT_MINI_APP_SECRET}
+```
+
+公众号：
+
+```go
+official := weixin.Get("official")
+
+authorizeURL := official.AuthorizeURL(redirectURI, "snsapi_userinfo", state)
+token, err := official.ExchangeCode(ctx, code)          // 网页授权
+user, err := official.OAuthUserInfo(ctx, token.AccessToken, token.OpenID)
+config, err := official.JSSDKConfig(ctx, pageURL)       // JS-SDK 签名
+
+// 服务端回调校验
+if !official.VerifySignature(signature, timestamp, nonce) { ... }
+if !official.VerifyMessageSignature(msgSignature, timestamp, nonce, encrypt) { ... }
+plain, err := official.DecryptMessage(encrypt)          // AES 消息解密
+```
+
+小程序：
+
+```go
+mini := weixin.Get("mini")
+
+session, err := mini.Code2Session(ctx, code)            // openid + session_key
+phone, err := mini.PhoneNumber(ctx, phoneCode)          // 新版手机号获取
+phone, err := mini.DecryptPhone(session.SessionKey, encryptedData, iv)
+user, err := mini.DecryptUserInfo(session.SessionKey, encryptedData, iv)
+
+accessToken, err := mini.AccessToken(ctx)               // 业务接口调用
+```
+
+- 令牌缓存优先使用本地内存，启用 Redis 缓存时自动多实例共享。
+- `weixin.Apps()` 返回已加载应用，`weixin.Default()` 返回默认应用。
+- 同名应用、缺失凭证、非法 AES Key 会在启动阶段报错。
+- 未引入第三方 SDK，基于标准库实现，避免额外依赖。
+
+### 新增基础设施能力
+
+**链路追踪（OpenTelemetry）**
+
+```yaml
+trace:
+  enabled: true
+  endpoint: localhost:4318
+  protocol: http
+  sample_ratio: 1.0
+```
+
+- `trace.Middleware()` 已内置到全局中间件，自动解析/生成 traceparent 并回写 `X-Trace-ID`。
+- 访问日志自动携带 `trace_id`；出站请求使用 `httpclient` 或 `trace.HTTPTransport` 即可传递链路。
+
+**OpenAPI 文档（swaggo）**
+
+```bash
+swag init -g cmd/server/main.go -o docs
+```
+
+业务 `main` 匿名导入生成的 `docs` 包，并开启：
+
+```yaml
+openapi:
+  enabled: true
+  path: /swagger
+```
+
+**对象存储与文件扫描**
+
+- `storage.driver` 支持 `local`、`s3`、`minio`，配置 `endpoint/bucket/region/access_key/secret_key/use_ssl`。
+- `upload.scan_enabled: true` 时使用 `upload.clamav` 配置的 clamd 地址进行 INSTREAM 扫描；也可通过 `upload.SetScanner` 注入自定义实现。
+
+**会话持久化与 API Key**
+
+```go
+repo, _ := gormstore.New(database.Get().DB())
+auth.SetSessionRepository(repo)
+
+keys := auth.NewMemoryAPIKeyRepository()
+auth.SetAPIKeyRepository(keys)
+```
+
+- API Key 明文只在创建时返回，服务端保存 sha256 哈希；支持 `X-API-Key` 与 `Authorization: Bearer gf_xxx`。
+
+**分布式锁、限流与 Outbox**
+
+- `lock.NewRedis(cache.Get().(*cache.RedisCache).Client(), lock.RedisOptions{...})`。
+- 启用 Redis 缓存时，全局限流自动切换为 Redis 分布式令牌桶，否则保持进程内实现。
+- Outbox：业务事务内调用 `outbox.Record(ctx, tx, ev)`；`outbox.enabled: true` 时自动迁移并启动 relay 投递到 EventBus。
+
+**WebSocket 业务协议**
+
+未设置 `SetOnMessage` 时启用内置 JSON 协议：
+
+```json
+{"type":"subscribe","topic":"device/1"}
+{"type":"publish","topic":"device/1","data":{"online":true}}
+```
+
+支持 `subscribe / unsubscribe / publish / ping`，单连接订阅上限由 `websocket.max_topics` 控制。
+
+**通知、i18n、验证码、TOTP、OIDC**
+
+- `notify.NewSMTP`、`notify.NewWebhook`、`notify.NewSMS`。
+- `i18n.New("zh-CN")` + `bundle.Middleware()`。
+- `captcha.New(cfg, store)` 生成图片验证码。
+- `auth.GenerateTOTPSecret/VerifyTOTP` 提供 TOTP。
+- `auth/oidc.New(ctx, cfg)` 完成 OIDC 授权码登录与 ID Token 校验。
+
+**HTTP 客户端与中间件**
+
+- `httpclient.New(httpclient.Options{...})` 内置超时、重试、熔断与 JSON 辅助。
+- `middleware.Gzip()`、`middleware.Timeout()`、`middleware.Idempotency()`；Web 已默认启用 gzip，`server.request_timeout` 可开启全局请求超时。
+
+**DNS-01 与密钥管理**
+
+- DNS-01 使用 Let's Encrypt：实现 `web.DNSProvider` 并在启动前 `web.SetACMEDNSProvider(provider)`，将 `tls.acme.challenge` 设为 `dns-01`。
+- `secrets.New("vault")` 或 `secrets.NewVault(cfg)` 读取 Vault KV v2；`secrets.NewRotating` 支持新旧密钥宽限期轮换。
+
 ## 错误处理
 
 统一错误结构：
@@ -1420,29 +1678,28 @@ govulncheck ./...
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | V1.0 基础框架 | boot 生命周期、按包配置注册、全局实例、Gin Server、Router、Middleware、统一响应、错误处理、GORM、Zap、健康检查、优雅退出 | 已实现 |
-| V1.1 认证与安全 | JWT、Refresh Token、Session、Argon2id、RBAC、资源授权、限流、CSRF、安全 Header、审计、AES 加密 | 已实现；API Key 规划 |
-| V1.2 基础设施 | Redis、Cache、Storage、Scheduler、EventBus、TLS/ACME、SPA Embed、Prometheus、协程池、安全上传、图片处理、Excel 导入导出、PDF 生成、数据库迁移 | 已实现；S3/MinIO、OpenTelemetry 规划 |
+| V1.1 认证与安全 | JWT、Refresh Token、Session、Argon2id、RBAC、资源授权、限流、CSRF、安全 Header、审计、AES 加密、API Key、TOTP、OIDC、验证码 | 已实现 |
+| V1.2 基础设施 | Redis、Cache、Storage、Scheduler、EventBus、TLS/ACME、SPA Embed、Prometheus、协程池、安全上传、图片处理、Excel 导入导出、PDF 生成、数据库迁移、S3/MinIO、OpenTelemetry、OpenAPI、分布式锁、Outbox | 已实现 |
 | V1.3 IoT 扩展 | MQTT Broker、MQTT 客户端、WebSocket Hub、设备鉴权、HMAC、MQTT ACL、设备命令、命令幂等、设备审计 | MQTT Broker/客户端/WebSocket 已实现；设备鉴权与命令幂等规划 |
+| V1.4 平台能力 | API Key、通知、i18n、ClamAV、HTTP 客户端、gzip/timeout/幂等中间件、WebSocket topic 协议、DNS-01、Vault 与密钥轮换、sysinfo 实时资源分析、企业离线许可、微信鉴权 | 已实现 |
 
 后续扩展点：
 
-- S3/MinIO 存储、ACME DNS-01。
-- OpenTelemetry 链路追踪。
-- GORM SessionRepository 持久化实现。
-- 分布式定时任务锁。
-- OpenAPI 文档。
 - IoT 设备认证、MQTT ACL、设备命令幂等与设备审计。
-- WebSocket 业务协议（消息路由、订阅/频道、鉴权后重新校验）。
+- 分布式定时任务锁（`lock` 包已提供，调度器尚未内置集成）。
+- KMS 与云 Secret Manager（Vault 已支持）。
+- 可靠消息队列（NATS、Kafka、Redis Streams）。
+- 搜索、特性开关、远程配置中心等可选扩展。
 
 ## 核心接口
 
 ```go
 // boot 生命周期
-func Register(name string, task *Task) error
+func Register(name string, task *Module) error
 func Startup(ctx context.Context) error
 func Shutdown(ctx context.Context) error
 
-type Task struct {
+type Module struct {
     Depends  []string
     Startup  func(ctx context.Context) error
     Shutdown func(ctx context.Context) error
@@ -1459,7 +1716,7 @@ mqtt.Get() / broker.Get() / websocket.Get()
 pool.Get() / scheduler.Get() / event.Get() / logger.Get()
 
 // Web
-web.Configure(opts ...Option)
+web.Configure(opts ...WebOption)
 web.Startup(ctx context.Context) error
 web.Run(ctx context.Context) error
 web.API() *gin.RouterGroup

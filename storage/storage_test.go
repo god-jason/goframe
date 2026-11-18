@@ -58,9 +58,6 @@ func TestLocalStorageCanceledContext(t *testing.T) {
 }
 
 func TestNewRejectsUnsupportedDriver(t *testing.T) {
-	if _, err := New(Config{Driver: "s3", Endpoint: "x", Bucket: "b"}); err == nil {
-		t.Fatal("expected s3 driver to be unavailable")
-	}
 	if _, err := New(Config{Driver: "unknown"}); err == nil {
 		t.Fatal("expected unsupported driver error")
 	}

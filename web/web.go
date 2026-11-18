@@ -1,11 +1,11 @@
-// Package web 统一装配 Gin 引擎、全局中间件、安全组件、健康检查与 HTTP Server。
+// Package web 统一装配 Gin 引擎、全局中间件、安全组件、健康检查、指标与 HTTP Server。
 //
 // 启动流程：
 //
-//	web.Configure(...)      // 可选：注入 SPA 静态资源等
-//	boot.Startup(ctx)       // 基础设施与 web 引擎
-//	web.API()               // 业务手动注册模块与路由
-//	web.Run(ctx)            // 最后手动启动 HTTP 服务
+//	web.Configure(...)   // 可选：注入 SPA 静态资源等
+//	boot.Startup(ctx)    // 基础设施与 Web 引擎
+//	web.API()            // 业务手动注册模块与路由
+//	web.Run(ctx)         // 最后手动启动 HTTP 服务
 package web
 
 import (
@@ -14,8 +14,8 @@ import (
 	"io/fs"
 	"os"
 	"strings"
-	"sync"
 
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 
 	"github.com/god-jason/goframe/boot"
@@ -24,73 +24,71 @@ import (
 	"github.com/god-jason/goframe/database"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/health"
+	"github.com/god-jason/goframe/license"
 	"github.com/god-jason/goframe/logger"
 	"github.com/god-jason/goframe/middleware"
 	"github.com/god-jason/goframe/monitor"
+	"github.com/god-jason/goframe/openapi"
 	"github.com/god-jason/goframe/response"
 	"github.com/god-jason/goframe/router"
 	"github.com/god-jason/goframe/security/csrf"
 	"github.com/god-jason/goframe/security/ratelimit"
-	"github.com/god-jason/goframe/server"
+	"github.com/god-jason/goframe/sysinfo"
+	"github.com/god-jason/goframe/trace"
 	"github.com/god-jason/goframe/websocket"
 )
 
-// Options 是 web 装配选项。必须在 boot.Startup 前通过 Configure 设置。
-type Options struct {
+// WebOptions 是 Web 装配选项。必须在 boot.Startup 前通过 Configure 设置。
+type WebOptions struct {
 	// FileSystem 是 SPA embed 模式使用的静态资源文件系统。
 	FileSystem fs.FS
 }
 
-// Option 是 web 装配选项函数。
-type Option func(*Options)
+// WebOption 是 Web 装配选项函数。
+type WebOption func(*WebOptions)
 
 // WithFileSystem 注入 SPA embed 模式的静态资源。
-func WithFileSystem(fsys fs.FS) Option {
-	return func(o *Options) { o.FileSystem = fsys }
+func WithFileSystem(fsys fs.FS) WebOption {
+	return func(o *WebOptions) { o.FileSystem = fsys }
 }
 
 var (
-	options Options
+	webOptions WebOptions
 
 	global = struct {
-		sync.RWMutex
 		engine  *gin.Engine
 		router  *router.Router
-		server  *server.Server
+		server  *Server
 		health  *health.Checker
 		metrics *monitor.Metrics
 		started bool
 	}{}
 )
 
-// Configure 设置 web 装配选项，应在 boot.Startup 前调用。
-func Configure(opts ...Option) {
+// Configure 设置 Web 装配选项，应在 boot.Startup 前调用。
+func Configure(opts ...WebOption) {
 	for _, opt := range opts {
 		if opt != nil {
-			opt(&options)
+			opt(&webOptions)
 		}
 	}
 }
 
 func init() {
-	_ = boot.Register("web", &boot.Task{
+	_ = boot.Register("web", &boot.Module{
 		Startup:  Startup,
 		Shutdown: Shutdown,
-		Depends:  []string{"config", "logger", "database", "cache", "ratelimit", "csrf", "websocket"},
+		Depends:  []string{"config", "logger", "trace", "license", "database", "cache", "ratelimit", "csrf", "websocket"},
 	})
 }
 
 // Engine 返回全局 Gin 引擎。
 func Engine() *gin.Engine {
-	global.RLock()
-	defer global.RUnlock()
 	return global.engine
 }
 
 // Router 返回路由封装。
 func Router() *router.Router {
-	global.RLock()
-	defer global.RUnlock()
 	return global.router
 }
 
@@ -104,23 +102,17 @@ func API() *gin.RouterGroup {
 
 // Health 返回健康检查器。
 func Health() *health.Checker {
-	global.RLock()
-	defer global.RUnlock()
 	return global.health
 }
 
 // Metrics 返回 Prometheus 指标。
 func Metrics() *monitor.Metrics {
-	global.RLock()
-	defer global.RUnlock()
 	return global.metrics
 }
 
 // Addr 返回实际监听地址。
 func Addr() string {
-	global.RLock()
 	srv := global.server
-	global.RUnlock()
 	if srv != nil {
 		return srv.Addr()
 	}
@@ -130,31 +122,31 @@ func Addr() string {
 // Startup 创建 Gin 引擎、中间件、健康检查与 HTTP Server（不监听端口）。
 func Startup(ctx context.Context) error {
 	_ = ctx
-	serverCfg := server.Current()
-	if err := serverCfg.Validate(); err != nil {
+	cfg := GetConfig()
+	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	tlsCfg := server.CurrentTLSConfig()
-	if err := tlsCfg.Validate(); err != nil {
+	tlsConfig := CurrentTLSConfig()
+	if err := tlsConfig.Validate(); err != nil {
 		return err
 	}
 
-	gin.SetMode(serverCfg.Mode)
+	gin.SetMode(cfg.Mode)
 	engine := gin.New()
-	if len(serverCfg.TrustedProxies) > 0 {
-		if err := engine.SetTrustedProxies(serverCfg.TrustedProxies); err != nil {
-			return fmt.Errorf("web: set trusted proxies: %w", err)
+	if len(cfg.TrustedProxies) > 0 {
+		if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+			return fmt.Errorf("server: set trusted proxies: %w", err)
 		}
 	} else {
 		_ = engine.SetTrustedProxies(nil)
 	}
 
-	if err := setupMiddleware(engine); err != nil {
+	if err := setupMiddleware(engine, *cfg); err != nil {
 		return err
 	}
 	api := router.New(engine, router.Options{
-		APIPrefix:  serverCfg.APIPrefix,
-		APIVersion: serverCfg.APIVersion,
+		APIPrefix:  cfg.APIPrefix,
+		APIVersion: cfg.APIVersion,
 	})
 	_ = api
 
@@ -173,41 +165,45 @@ func Startup(ctx context.Context) error {
 	metrics := monitor.NewMetrics()
 	engine.GET("/metrics", metrics.Handler())
 
+	if pprofConfig := PProf(); pprofConfig.Enabled {
+		pprof.Register(engine, pprofConfig.Path)
+	}
+
+	openapi.Register(engine)
+	sysinfo.Register(engine)
+	license.Register(engine)
+
 	if hub := websocket.Get(); hub != nil {
-		engine.GET(websocket.Current().Path, hub.Handler())
+		engine.GET(websocket.GetConfig().Path, hub.Handler())
 	}
 
-	if err := setupNoRoute(engine, *serverCfg); err != nil {
-		return fmt.Errorf("web: setup fallback routes: %w", err)
+	if err := setupNoRoute(engine, *cfg); err != nil {
+		return fmt.Errorf("server: setup fallback routes: %w", err)
 	}
 
-	httpServer, err := server.New(server.Options{
-		Config:  *serverCfg,
-		TLS:     *tlsCfg,
+	httpServer, err := New(Options{
+		Config:  *cfg,
+		TLS:     *tlsConfig,
 		Handler: engine,
 		Logger:  logger.Get(),
 	})
 	if err != nil {
-		return fmt.Errorf("web: create http server: %w", err)
+		return fmt.Errorf("server: create http server: %w", err)
 	}
 
-	global.Lock()
 	global.engine = engine
 	global.router = api
 	global.health = checker
 	global.metrics = metrics
 	global.server = httpServer
-	global.Unlock()
 	return nil
 }
 
 // Shutdown 停止 HTTP Server。
 func Shutdown(ctx context.Context) error {
-	global.Lock()
 	checker := global.health
 	srv := global.server
 	global.started = false
-	global.Unlock()
 
 	if checker != nil {
 		checker.SetReady(false)
@@ -220,12 +216,10 @@ func Shutdown(ctx context.Context) error {
 
 // Start 开始监听端口，并标记服务就绪。
 func Start() error {
-	global.RLock()
 	srv := global.server
 	checker := global.health
-	global.RUnlock()
 	if srv == nil {
-		return fmt.Errorf("web: server is not initialized")
+		return fmt.Errorf("server: http server is not initialized")
 	}
 
 	if err := srv.Start(); err != nil {
@@ -234,9 +228,7 @@ func Start() error {
 	if checker != nil {
 		checker.SetReady(true)
 	}
-	global.Lock()
 	global.started = true
-	global.Unlock()
 	return nil
 }
 
@@ -250,9 +242,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
-	global.RLock()
 	srv := global.server
-	global.RUnlock()
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Wait() }()
@@ -265,12 +255,20 @@ func Run(ctx context.Context) error {
 	}
 }
 
-func setupMiddleware(engine *gin.Engine) error {
-	securityCfg := middleware.Current()
+func setupMiddleware(engine *gin.Engine, cfg Config) error {
+	securityCfg := middleware.GetConfig()
 
-	handlers := []gin.HandlerFunc{
+	handlers := make([]gin.HandlerFunc, 0, 12)
+	if cfg.RequestTimeout > 0 {
+		handlers = append(handlers, middleware.Timeout(cfg.RequestTimeout))
+	}
+	handlers = append(handlers,
 		middleware.RequestID(),
+		trace.Middleware(),
 		middleware.Recovery(logger.Get()),
+	)
+	if cfg.Compression {
+		handlers = append(handlers, middleware.Gzip(middleware.GzipMinSize(cfg.CompressionMinSize)))
 	}
 	if securityCfg.Enabled {
 		if securityCfg.Headers.Enabled {
@@ -283,7 +281,7 @@ func setupMiddleware(engine *gin.Engine) error {
 		}
 		handlers = append(handlers, corsHandler)
 		if limiter := ratelimit.Get(); limiter != nil {
-			handlers = append(handlers, middleware.RateLimit(limiter, nil, ratelimit.Current().FailOpen))
+			handlers = append(handlers, middleware.RateLimit(limiter, nil, ratelimit.GetConfig().FailOpen))
 		}
 		handlers = append(handlers, middleware.RequestLimits(securityCfg.Request))
 		handlers = append(handlers, middleware.CSRF(csrf.Get()))
@@ -293,7 +291,7 @@ func setupMiddleware(engine *gin.Engine) error {
 	return nil
 }
 
-func setupNoRoute(engine *gin.Engine, serverCfg server.Config) error {
+func setupNoRoute(engine *gin.Engine, cfg Config) error {
 	spaCfg := router.SPA()
 	if !spaCfg.Enabled {
 		engine.NoRoute(func(c *gin.Context) {
@@ -307,15 +305,15 @@ func setupNoRoute(engine *gin.Engine, serverCfg server.Config) error {
 	case "directory":
 		fsys = os.DirFS(spaCfg.Path)
 	case "embed":
-		if options.FileSystem == nil {
+		if webOptions.FileSystem == nil {
 			return fmt.Errorf("spa.mode embed requires web.WithFileSystem")
 		}
-		fsys = options.FileSystem
+		fsys = webOptions.FileSystem
 	default:
 		return fmt.Errorf("unsupported spa mode %q", spaCfg.Mode)
 	}
 
-	handler, err := router.NewSPAHandler(fsys, apiBasePath(serverCfg), router.SPAOptions{Index: spaCfg.Index})
+	handler, err := router.NewSPAHandler(fsys, apiBasePath(cfg), router.SPAOptions{Index: spaCfg.Index})
 	if err != nil {
 		return err
 	}
@@ -323,7 +321,7 @@ func setupNoRoute(engine *gin.Engine, serverCfg server.Config) error {
 	return nil
 }
 
-func apiBasePath(cfg server.Config) string {
+func apiBasePath(cfg Config) string {
 	prefix := strings.TrimRight(cfg.APIPrefix, "/")
 	version := strings.Trim(cfg.APIVersion, "/")
 	if version == "" {

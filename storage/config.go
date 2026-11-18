@@ -1,6 +1,7 @@
 package storage
 
 // Config 是文件存储配置。
+// local 驱动使用 Path/BaseURL，s3/minio 驱动使用 Endpoint/Bucket/Region/凭证。
 type Config struct {
 	Driver    string `mapstructure:"driver"`
 	Path      string `mapstructure:"path"`
@@ -11,6 +12,7 @@ type Config struct {
 	AccessKey string `mapstructure:"access_key"`
 	SecretKey string `mapstructure:"secret_key"`
 	UseSSL    bool   `mapstructure:"use_ssl"`
+	Secure    bool   `mapstructure:"secure"`
 }
 
 // DefaultConfig 返回存储默认配置。

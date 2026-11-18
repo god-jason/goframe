@@ -47,7 +47,7 @@ var (
 func init() {
 	appSection = Register("app", DefaultAppConfig())
 	// config 是最底层任务，其他组件都通过 Depends: []string{"config"} 排在其后。
-	_ = boot.Register("config", &boot.Task{
+	_ = boot.Register("config", &boot.Module{
 		Startup:  Startup,
 		Shutdown: Shutdown,
 	})

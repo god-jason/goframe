@@ -23,7 +23,7 @@ func New(cfg Config) (Storage, error) {
 	case "local":
 		return NewLocal(cfg)
 	case "s3", "minio":
-		return nil, fmt.Errorf("storage: driver %q is not available in this build, use local", cfg.Driver)
+		return NewS3(cfg)
 	default:
 		return nil, fmt.Errorf("storage: unsupported driver %q", cfg.Driver)
 	}

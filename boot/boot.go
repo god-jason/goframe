@@ -20,8 +20,8 @@ import (
 	"time"
 )
 
-// Task 是一个可启动/释放的组件。
-type Task struct {
+// Module 是一个可启动/释放的组件。
+type Module struct {
 	// Depends 声明依赖的任务名，启动时先启动依赖，释放时后释放依赖。
 	Depends []string
 	// Startup 启动组件；为 nil 表示只参与释放顺序（例如只读资源）。
@@ -39,7 +39,7 @@ type Registry struct {
 
 	mu      sync.Mutex
 	log     *slog.Logger
-	tasks   map[string]*Task
+	tasks   map[string]*Module
 	order   []string
 	started []string
 	booted  map[string]bool
@@ -57,7 +57,7 @@ func NewRegistryWithLogger(log *slog.Logger) *Registry {
 	}
 	return &Registry{
 		log:    log,
-		tasks:  make(map[string]*Task),
+		tasks:  make(map[string]*Module),
 		booted: make(map[string]bool),
 	}
 }
@@ -73,7 +73,7 @@ func (r *Registry) SetLogger(log *slog.Logger) {
 }
 
 // Register 注册任务。任务名不能为空，且不能重复注册。
-func (r *Registry) Register(name string, task *Task) error {
+func (r *Registry) Register(name string, task *Module) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("boot: task name must not be empty")
 	}
@@ -284,7 +284,7 @@ var defaultRegistry = NewRegistry()
 func Default() *Registry { return defaultRegistry }
 
 // Register 向默认注册表注册任务。
-func Register(name string, task *Task) error { return defaultRegistry.Register(name, task) }
+func Register(name string, task *Module) error { return defaultRegistry.Register(name, task) }
 
 // Startup 启动默认注册表中的所有任务。
 func Startup(ctx context.Context) error { return defaultRegistry.Startup(ctx) }

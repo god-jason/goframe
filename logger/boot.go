@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/config"
@@ -13,25 +12,22 @@ import (
 var (
 	cfg    = config.Register("logger", DefaultConfig())
 	global = struct {
-		sync.RWMutex
 		logger Logger
 		root   *ZapLogger
 	}{logger: NewNop()}
 )
 
-// Current 返回当前 logger 配置快照。
-func Current() *Config { return cfg.Get() }
+// GetConfig 返回当前 logger 配置快照。
+func GetConfig() *Config { return cfg.Get() }
 
 // Get 返回全局 logger。boot.Startup 前返回空实现。
 func Get() Logger {
-	global.RLock()
-	defer global.RUnlock()
 	return global.logger
 }
 
 func init() {
 	config.OnReload(applyReload)
-	_ = boot.Register("logger", &boot.Task{
+	_ = boot.Register("logger", &boot.Module{
 		Startup:  Startup,
 		Shutdown: Shutdown,
 		Depends:  []string{"config"},
@@ -40,7 +36,7 @@ func init() {
 
 // Startup 是 logger 的 boot 入口。
 func Startup(context.Context) error {
-	current := Current()
+	current := GetConfig()
 	if err := validateConfig(*current); err != nil {
 		return err
 	}
@@ -49,11 +45,9 @@ func Startup(context.Context) error {
 		return err
 	}
 
-	global.Lock()
 	previous := global.root
 	global.root = instance
 	global.logger = instance
-	global.Unlock()
 
 	if previous != nil {
 		_ = previous.Close()
@@ -63,11 +57,9 @@ func Startup(context.Context) error {
 
 // Shutdown 关闭全局日志文件。
 func Shutdown(context.Context) error {
-	global.Lock()
 	instance := global.root
 	global.root = nil
 	global.logger = NewNop()
-	global.Unlock()
 
 	if instance != nil {
 		return instance.Close()
@@ -77,10 +69,8 @@ func Shutdown(context.Context) error {
 
 // applyReload 只在热更新时调整日志等级；格式/输出变更需要重启。
 func applyReload() {
-	level := Current().Level
-	global.RLock()
+	level := GetConfig().Level
 	current := global.logger
-	global.RUnlock()
 
 	if setter, ok := current.(interface{ SetLevel(string) error }); ok {
 		_ = setter.SetLevel(level)

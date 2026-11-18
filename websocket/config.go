@@ -18,6 +18,8 @@ type Config struct {
 	SendQueue      int             `mapstructure:"send_queue"`
 	InboundQueue   int             `mapstructure:"inbound_queue"`
 	AllowAnonymous bool            `mapstructure:"allow_anonymous"`
+	// MaxTopics 是单个连接允许订阅的主题数量上限。
+	MaxTopics int `mapstructure:"max_topics"`
 }
 
 // DefaultConfig 返回 WebSocket 默认配置。
@@ -30,5 +32,6 @@ func DefaultConfig() Config {
 		PingInterval:   30 * time.Second,
 		SendQueue:      256,
 		InboundQueue:   64,
+		MaxTopics:      100,
 	}
 }

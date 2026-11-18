@@ -13,10 +13,32 @@ import (
 )
 
 // Authenticate 解析可选的身份令牌。令牌缺失时放行，令牌非法时返回 401。
+// 支持 X-API-Key 请求头，以及 Authorization: Bearer <api-key>。
 func Authenticate(authenticator auth.Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if apiKey := strings.TrimSpace(c.GetHeader(auth.HeaderAPIKey)); apiKey != "" {
+			identity, err := auth.VerifyAPIKey(c.Request.Context(), apiKey)
+			if err != nil {
+				response.Fail(c, err)
+				return
+			}
+			setIdentity(c, identity)
+			c.Next()
+			return
+		}
+
 		token := bearerToken(c)
 		if token == "" {
+			c.Next()
+			return
+		}
+		if strings.HasPrefix(token, auth.APIKeyPrefix) {
+			identity, err := auth.VerifyAPIKey(c.Request.Context(), token)
+			if err != nil {
+				response.Fail(c, err)
+				return
+			}
+			setIdentity(c, identity)
 			c.Next()
 			return
 		}

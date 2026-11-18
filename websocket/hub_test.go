@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -228,4 +229,237 @@ func waitFor(t *testing.T, condition func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("condition not met")
+}
+
+type testFrame struct {
+	Type    string `json:"type"`
+	Topic   string `json:"topic"`
+	Message string `json:"message"`
+}
+
+func writeJSON(t *testing.T, conn *websocket.Conn, value any) {
+	t.Helper()
+	payload, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+}
+
+func readFrame(t *testing.T, conn *websocket.Conn) testFrame {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read frame: %v", err)
+	}
+	var frame testFrame
+	if err := json.Unmarshal(payload, &frame); err != nil {
+		t.Fatalf("frame %q: %v", payload, err)
+	}
+	return frame
+}
+
+func onlyClient(t *testing.T, hub *Hub) *Client {
+	t.Helper()
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+	if len(hub.clients) != 1 {
+		t.Fatalf("clients = %d", len(hub.clients))
+	}
+	for client := range hub.clients {
+		return client
+	}
+	return nil
+}
+
+func sameTopics(got []string, want ...string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestTopicSubscribePublishUnsubscribe(t *testing.T) {
+	hub, server := newTestHub(t, Options{AllowAnonymous: true})
+
+	conn, _, err := dial(t, server, "")
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	waitFor(t, func() bool { return hub.Stats().Clients == 1 })
+
+	writeJSON(t, conn, map[string]any{"type": "subscribe", "topic": "news"})
+	if frame := readFrame(t, conn); frame.Type != "subscribed" || frame.Topic != "news" {
+		t.Fatalf("subscribe frame = %+v", frame)
+	}
+
+	if sent := hub.Publish("news", []byte("hello")); sent != 1 {
+		t.Fatalf("publish sent = %d", sent)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, payload, err := conn.ReadMessage(); err != nil || string(payload) != "hello" {
+		t.Fatalf("read publish = %q, %v", payload, err)
+	}
+
+	client := onlyClient(t, hub)
+	if topics := client.Topics(); !sameTopics(topics, "news") {
+		t.Fatalf("client topics = %v", topics)
+	}
+	if topics := hub.Topics(); !sameTopics(topics, "news") {
+		t.Fatalf("hub topics = %v", topics)
+	}
+
+	if sent := hub.Subscribe("anonymous", "lobby"); sent != 1 {
+		t.Fatalf("hub subscribe = %d", sent)
+	}
+	if topics := hub.Topics(); !sameTopics(topics, "lobby", "news") {
+		t.Fatalf("hub topics after subscribe = %v", topics)
+	}
+	if sent := hub.Unsubscribe("anonymous", "lobby"); sent != 1 {
+		t.Fatalf("hub unsubscribe = %d", sent)
+	}
+
+	writeJSON(t, conn, map[string]any{"type": "unsubscribe", "topic": "news"})
+	if frame := readFrame(t, conn); frame.Type != "unsubscribed" || frame.Topic != "news" {
+		t.Fatalf("unsubscribe frame = %+v", frame)
+	}
+	if sent := hub.Publish("news", []byte("ignored")); sent != 0 {
+		t.Fatalf("publish after unsubscribe sent = %d", sent)
+	}
+	if topics := hub.Topics(); len(topics) != 0 {
+		t.Fatalf("hub topics after unsubscribe = %v", topics)
+	}
+
+	writeJSON(t, conn, map[string]any{"type": "ping"})
+	if frame := readFrame(t, conn); frame.Type != "pong" {
+		t.Fatalf("ping frame = %+v", frame)
+	}
+}
+
+func TestTopicLimit(t *testing.T) {
+	hub, server := newTestHub(t, Options{AllowAnonymous: true, MaxTopics: 2})
+
+	conn, _, err := dial(t, server, "")
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	waitFor(t, func() bool { return hub.Stats().Clients == 1 })
+
+	for _, topic := range []string{"a", "b"} {
+		writeJSON(t, conn, map[string]any{"type": "subscribe", "topic": topic})
+		if frame := readFrame(t, conn); frame.Type != "subscribed" || frame.Topic != topic {
+			t.Fatalf("subscribe %s frame = %+v", topic, frame)
+		}
+	}
+
+	writeJSON(t, conn, map[string]any{"type": "subscribe", "topic": "c"})
+	frame := readFrame(t, conn)
+	if frame.Type != "error" || !strings.Contains(frame.Message, "limit") {
+		t.Fatalf("over-limit frame = %+v", frame)
+	}
+	if topics := hub.Topics(); !sameTopics(topics, "a", "b") {
+		t.Fatalf("topics = %v", topics)
+	}
+}
+
+func TestControlInvalidJSON(t *testing.T) {
+	hub, server := newTestHub(t, Options{AllowAnonymous: true})
+
+	conn, _, err := dial(t, server, "")
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	waitFor(t, func() bool { return hub.Stats().Clients == 1 })
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte("{not-json")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if frame := readFrame(t, conn); frame.Type != "error" || !strings.Contains(frame.Message, "json") {
+		t.Fatalf("invalid json frame = %+v", frame)
+	}
+
+	writeJSON(t, conn, map[string]any{"type": "ping"})
+	if frame := readFrame(t, conn); frame.Type != "pong" {
+		t.Fatalf("ping after invalid json = %+v", frame)
+	}
+}
+
+func TestControlPublishRoutesToSubscribers(t *testing.T) {
+	hub, server := newTestHub(t, Options{AllowAnonymous: true})
+
+	subscriber, _, err := dial(t, server, "")
+	if err != nil {
+		t.Fatalf("dial subscriber: %v", err)
+	}
+	defer subscriber.Close()
+	publisher, _, err := dial(t, server, "")
+	if err != nil {
+		t.Fatalf("dial publisher: %v", err)
+	}
+	defer publisher.Close()
+	waitFor(t, func() bool { return hub.Stats().Clients == 2 })
+
+	writeJSON(t, subscriber, map[string]any{"type": "subscribe", "topic": "chat"})
+	if frame := readFrame(t, subscriber); frame.Type != "subscribed" || frame.Topic != "chat" {
+		t.Fatalf("subscribe frame = %+v", frame)
+	}
+
+	writeJSON(t, publisher, map[string]any{
+		"type":  "publish",
+		"topic": "chat",
+		"data":  map[string]any{"msg": "hi"},
+	})
+
+	_ = subscriber.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, payload, err := subscriber.ReadMessage()
+	if err != nil {
+		t.Fatalf("read published: %v", err)
+	}
+	if string(payload) != `{"msg":"hi"}` {
+		t.Fatalf("published payload = %q", payload)
+	}
+}
+
+func TestOnMessageBypassesBuiltinProtocol(t *testing.T) {
+	received := make(chan string, 1)
+	_, server := newTestHub(t, Options{
+		AllowAnonymous: true,
+		OnMessage: func(_ context.Context, _ string, payload []byte) error {
+			received <- string(payload)
+			return nil
+		},
+	})
+
+	conn, _, err := dial(t, server, "")
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	writeJSON(t, conn, map[string]any{"type": "ping"})
+	select {
+	case payload := <-received:
+		if payload != `{"type":"ping"}` {
+			t.Fatalf("handler payload = %q", payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not receive message")
+	}
+}
+
+func TestDefaultMaxTopics(t *testing.T) {
+	if got := DefaultConfig().MaxTopics; got != 100 {
+		t.Fatalf("default max topics = %d", got)
+	}
 }

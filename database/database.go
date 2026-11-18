@@ -34,6 +34,18 @@ type gormDatabase struct {
 	log   logger.Logger
 }
 
+// newDialector 根据驱动名称创建方言。变量形式便于测试注入。
+var newDialector = func(driver, dsn string) (gorm.Dialector, error) {
+	switch strings.ToLower(driver) {
+	case "mysql":
+		return mysqlDialector(dsn), nil
+	case "postgres":
+		return postgresDialector(dsn), nil
+	default:
+		return nil, fmt.Errorf("database: unsupported driver %q", driver)
+	}
+}
+
 // Open 根据配置创建数据库连接。
 func Open(cfg Config, log logger.Logger) (Database, error) {
 	if log == nil {
@@ -41,16 +53,14 @@ func Open(cfg Config, log logger.Logger) (Database, error) {
 	}
 
 	log.Debug("database connecting", logger.String("driver", cfg.Driver))
-	var dialector gorm.Dialector
-	switch strings.ToLower(cfg.Driver) {
-	case "mysql":
-		dialector = mysqlDialector(cfg.DSN)
-	case "postgres":
-		dialector = postgresDialector(cfg.DSN)
-	default:
-		return nil, fmt.Errorf("database: unsupported driver %q", cfg.Driver)
+	dialector, err := newDialector(cfg.Driver, cfg.DSN)
+	if err != nil {
+		return nil, err
 	}
+	return openWithDialector(dialector, cfg, log)
+}
 
+func openWithDialector(dialector gorm.Dialector, cfg Config, log logger.Logger) (Database, error) {
 	gormDB, err := gorm.Open(dialector, &gorm.Config{
 		Logger:  newGormLogger(log, cfg.LogLevel, cfg.SlowThreshold),
 		NowFunc: func() time.Time { return time.Now().UTC() },

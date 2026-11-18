@@ -16,6 +16,16 @@ const (
 	DefaultPassword = "admin123456"
 )
 
+// 以下变量是测试注入点，生产环境保持默认实现。
+var (
+	currentAuthConfig = auth.GetConfig
+	newPasswordHasher = func(cfg auth.PasswordConfig) (auth.PasswordHasher, error) {
+		return auth.NewPasswordHasher(cfg)
+	}
+	currentAuthManager = auth.Get
+	currentAuthorizer  = permission.Get
+)
+
 // Module 是示例业务模块。
 type Module struct {
 	handler *Handler
@@ -29,8 +39,8 @@ func (m *Module) Name() string { return "demo" }
 
 // Init 初始化模块。业务模块在 boot.Startup 之后手动调用。
 func (m *Module) Init() error {
-	cfg := auth.Current()
-	hasher, err := auth.NewPasswordHasher(cfg.Password)
+	cfg := currentAuthConfig()
+	hasher, err := newPasswordHasher(cfg.Password)
 	if err != nil {
 		return err
 	}
@@ -41,7 +51,7 @@ func (m *Module) Init() error {
 		return err
 	}
 
-	m.handler = NewHandler(service, auth.Get(), permission.Get())
+	m.handler = NewHandler(service, currentAuthManager(), currentAuthorizer())
 	return nil
 }
 

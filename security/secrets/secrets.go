@@ -23,10 +23,20 @@ func NewEnv(prefix string) *EnvProvider {
 }
 
 // New 根据配置创建密钥提供者。
+// vault 模式从 VAULT_ADDR、VAULT_TOKEN、VAULT_NAMESPACE、VAULT_MOUNT 读取连接信息。
 func New(provider string) (Provider, error) {
 	switch provider {
 	case "", "env":
 		return NewEnv(""), nil
+	case "vault":
+		cfg := DefaultVaultConfig()
+		cfg.Address = os.Getenv("VAULT_ADDR")
+		cfg.Token = os.Getenv("VAULT_TOKEN")
+		cfg.Namespace = os.Getenv("VAULT_NAMESPACE")
+		if mount := os.Getenv("VAULT_MOUNT"); mount != "" {
+			cfg.Mount = mount
+		}
+		return NewVault(cfg)
 	default:
 		return nil, fmt.Errorf("secrets: unsupported provider %q", provider)
 	}

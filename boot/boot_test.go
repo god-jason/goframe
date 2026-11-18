@@ -3,6 +3,8 @@ package boot
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -27,8 +29,8 @@ func (r *recorder) snapshot() []string {
 	return append([]string(nil), r.order...)
 }
 
-func (r *recorder) task(name string, depends ...string) *Task {
-	return &Task{
+func (r *recorder) task(name string, depends ...string) *Module {
+	return &Module{
 		Depends: depends,
 		Startup: func(context.Context) error {
 			r.add("start:" + name)
@@ -94,7 +96,7 @@ func TestStartupFailureRollsBack(t *testing.T) {
 	if err := registry.Register("first", rec.task("first")); err != nil {
 		t.Fatalf("register first: %v", err)
 	}
-	if err := registry.Register("broken", &Task{
+	if err := registry.Register("broken", &Module{
 		Depends: []string{"first"},
 		Startup: func(context.Context) error { return errors.New("boom") },
 	}); err != nil {
@@ -113,10 +115,10 @@ func TestStartupFailureRollsBack(t *testing.T) {
 
 func TestDependencyCycleDetected(t *testing.T) {
 	registry := NewRegistry()
-	if err := registry.Register("a", &Task{Depends: []string{"b"}}); err != nil {
+	if err := registry.Register("a", &Module{Depends: []string{"b"}}); err != nil {
 		t.Fatalf("register a: %v", err)
 	}
-	if err := registry.Register("b", &Task{Depends: []string{"a"}}); err != nil {
+	if err := registry.Register("b", &Module{Depends: []string{"a"}}); err != nil {
 		t.Fatalf("register b: %v", err)
 	}
 
@@ -128,7 +130,7 @@ func TestDependencyCycleDetected(t *testing.T) {
 
 func TestPanicIsolated(t *testing.T) {
 	registry := NewRegistry()
-	if err := registry.Register("panics", &Task{
+	if err := registry.Register("panics", &Module{
 		Startup:  func(context.Context) error { panic("kaboom") },
 		Shutdown: func(context.Context) error { panic("kaboom") },
 	}); err != nil {
@@ -146,13 +148,13 @@ func TestPanicIsolated(t *testing.T) {
 
 func TestRegisterRejectsDuplicates(t *testing.T) {
 	registry := NewRegistry()
-	if err := registry.Register("db", &Task{}); err != nil {
+	if err := registry.Register("db", &Module{}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if err := registry.Register("db", &Task{}); err == nil {
+	if err := registry.Register("db", &Module{}); err == nil {
 		t.Fatal("expected duplicate registration to fail")
 	}
-	if err := registry.Register("", &Task{}); err == nil {
+	if err := registry.Register("", &Module{}); err == nil {
 		t.Fatal("expected empty task name to fail")
 	}
 	if err := registry.Register("nil", nil); err == nil {
@@ -163,7 +165,7 @@ func TestRegisterRejectsDuplicates(t *testing.T) {
 func TestCallbacksCanAccessRegistry(t *testing.T) {
 	registry := NewRegistry()
 	done := make(chan struct{})
-	if err := registry.Register("meta", &Task{
+	if err := registry.Register("meta", &Module{
 		Startup: func(context.Context) error {
 			// 旧实现持有注册表锁回调，这里会死锁。
 			_ = registry.Names()
@@ -191,6 +193,68 @@ func TestCallbacksCanAccessRegistry(t *testing.T) {
 	}
 	if err := registry.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown: %v", err)
+	}
+}
+
+func TestRegistryLoggerConfiguration(t *testing.T) {
+	registry := NewRegistryWithLogger(nil)
+	if registry == nil {
+		t.Fatal("NewRegistryWithLogger(nil) must return a registry")
+	}
+	registry.SetLogger(nil)
+	registry.SetLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	// 空注册表在 nil context 下也应成功启动与释放。
+	if err := registry.Startup(nil); err != nil {
+		t.Fatalf("Startup(nil): %v", err)
+	}
+	if err := registry.Shutdown(nil); err != nil {
+		t.Fatalf("Shutdown(nil): %v", err)
+	}
+	if Default() == nil {
+		t.Fatal("Default() must not be nil")
+	}
+}
+
+func TestOpenMissingTaskAndUnknownShutdownEntry(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.open(context.Background(), "ghost", map[string]bool{}); err == nil {
+		t.Fatal("expected missing task error")
+	}
+
+	// started 中出现未注册任务时应被跳过而不是 panic。
+	registry.started = []string{"ghost"}
+	if err := registry.shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+}
+
+func TestShutdownContinuesAfterFailure(t *testing.T) {
+	rec := &recorder{}
+	registry := NewRegistry()
+	if err := registry.Register("first", rec.task("first")); err != nil {
+		t.Fatalf("register first: %v", err)
+	}
+	if err := registry.Register("broken", &Module{
+		Shutdown: func(context.Context) error { return errors.New("stop failed") },
+	}); err != nil {
+		t.Fatalf("register broken: %v", err)
+	}
+	if err := registry.Startup(context.Background()); err != nil {
+		t.Fatalf("Startup: %v", err)
+	}
+
+	err := registry.Shutdown(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "stop failed") {
+		t.Fatalf("Shutdown error = %v, want stop failed", err)
+	}
+	// 失败任务之后的已启动任务仍应逆序释放。
+	want := []string{"start:first", "stop:first"}
+	if got := rec.snapshot(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+	if len(registry.Started()) != 0 {
+		t.Fatalf("expected no started tasks, got %v", registry.Started())
 	}
 }
 

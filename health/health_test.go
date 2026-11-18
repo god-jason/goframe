@@ -6,10 +6,14 @@ import (
 	stderrors "errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/god-jason/goframe/logger"
 )
 
 func newHealthEngine(checker *Checker) *gin.Engine {
@@ -193,3 +197,98 @@ func TestDatabaseAndCacheCheckHelpers(t *testing.T) {
 type stubPinger struct{ err error }
 
 func (s stubPinger) Ping(context.Context) error { return s.err }
+
+func TestSetLoggerAndTimeout(t *testing.T) {
+	checker := New("v1")
+	checker.SetLogger(logger.NewNop())
+	checker.SetLogger(nil)
+	checker.SetTimeout(0)
+	checker.SetTimeout(50 * time.Millisecond)
+	if checker.IsReady() {
+		t.Fatal("new checker should not be ready")
+	}
+	checker.SetReady(true)
+	if !checker.IsReady() {
+		t.Fatal("checker should be ready")
+	}
+}
+
+func TestReadinessSkipsNonCriticalChecks(t *testing.T) {
+	checker := New("v1",
+		Check{
+			Name:     "cache",
+			Critical: false,
+			Fn:       func(context.Context) error { return stderrors.New("cache down") },
+		},
+		Check{
+			Name:     "database",
+			Critical: true,
+			Fn:       func(context.Context) error { return nil },
+		},
+	)
+	checker.SetReady(true)
+	engine := newHealthEngine(checker)
+
+	recorder := perform(engine, "/health/ready")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	report := decodeReport(t, recorder)
+	if len(report.Checks) != 1 || report.Checks[0].Name != "database" {
+		t.Fatalf("readiness should only run critical checks: %+v", report.Checks)
+	}
+}
+
+func TestCheckTimeout(t *testing.T) {
+	checker := New("v1", Check{
+		Name:     "slow",
+		Critical: true,
+		Fn: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	})
+	checker.SetTimeout(20 * time.Millisecond)
+	checker.SetReady(true)
+	engine := newHealthEngine(checker)
+
+	recorder := perform(engine, "/health")
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", recorder.Code)
+	}
+	report := decodeReport(t, recorder)
+	if len(report.Checks) != 1 || report.Checks[0].Status != StatusFailed {
+		t.Fatalf("unexpected checks: %+v", report.Checks)
+	}
+}
+
+func TestConcurrentChecks(t *testing.T) {
+	checks := make([]Check, 0, 10)
+	for i := 0; i < 10; i++ {
+		checks = append(checks, Check{
+			Name:     "check-" + strconv.Itoa(i),
+			Critical: true,
+			Fn: func(context.Context) error {
+				time.Sleep(2 * time.Millisecond)
+				return nil
+			},
+		})
+	}
+	checker := New("v1", checks...)
+	checker.SetReady(true)
+	engine := newHealthEngine(checker)
+
+	recorder := perform(engine, "/health")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	report := decodeReport(t, recorder)
+	if len(report.Checks) != 10 {
+		t.Fatalf("checks = %d, want 10", len(report.Checks))
+	}
+	for _, result := range report.Checks {
+		if result.Status != StatusOK {
+			t.Fatalf("unexpected result: %+v", result)
+		}
+	}
+}

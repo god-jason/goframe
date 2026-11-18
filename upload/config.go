@@ -6,6 +6,7 @@ import "github.com/god-jason/goframe/config"
 type Config struct {
 	MaxSize           config.ByteSize `mapstructure:"max_size"`
 	ScanEnabled       bool            `mapstructure:"scan_enabled"`
+	ClamAV            ClamAVConfig    `mapstructure:"clamav"`
 	AllowedExtensions []string        `mapstructure:"allowed_extensions"`
 	AllowedMIMETypes  []string        `mapstructure:"allowed_mime_types"`
 	ImageMaxWidth     int             `mapstructure:"image_max_width"`
@@ -18,6 +19,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		MaxSize:           50 << 20,
+		ClamAV:            DefaultClamAVConfig(),
 		AllowedExtensions: []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".csv", ".zip"},
 		ImageMaxWidth:     4096,
 		ImageMaxHeight:    4096,

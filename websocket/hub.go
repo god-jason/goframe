@@ -9,14 +9,24 @@
 //
 // 该包只负责连接与消息收发，不定义业务协议；业务通过 OnMessage 处理上行消息，
 // 通过 Hub.Broadcast / Hub.Send 下发消息。
+//
+// 未设置 OnMessage 时，Hub 内置一套基于 JSON 的 topic 订阅/发布协议：
+//
+//	{"type":"subscribe","topic":"x"}
+//	{"type":"unsubscribe","topic":"x"}
+//	{"type":"publish","topic":"x","data":...}
+//	{"type":"ping"}
 package websocket
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,6 +55,8 @@ type Options struct {
 	InboundQueue int
 	// AllowAnonymous 为 true 时，未配置 Authenticate 也允许连接，身份为 "anonymous"。
 	AllowAnonymous bool
+	// MaxTopics 是单个连接允许订阅的主题数量上限，默认 100。
+	MaxTopics int
 	// Authenticate 在握手前执行，返回业务主体标识（用户 ID、设备 ID 等）。
 	Authenticate func(c *gin.Context) (string, error)
 	// OnMessage 处理客户端上行消息。返回错误只记录日志，不关闭连接。
@@ -62,6 +74,26 @@ type ClientInfo struct {
 type Stats struct {
 	Clients int  `json:"clients"`
 	Closed  bool `json:"closed"`
+}
+
+// 内置 JSON 控制协议的错误。
+var (
+	errTopicRequired = errors.New("topic is required")
+	errTopicLimit    = errors.New("topic limit exceeded")
+)
+
+// controlRequest 是内置协议的上行帧。
+type controlRequest struct {
+	Type  string          `json:"type"`
+	Topic string          `json:"topic"`
+	Data  json.RawMessage `json:"data"`
+}
+
+// controlResponse 是内置协议的下行帧。
+type controlResponse struct {
+	Type    string `json:"type"`
+	Topic   string `json:"topic,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // Hub 管理所有 WebSocket 连接。
@@ -98,6 +130,9 @@ func NewHub(opts Options) *Hub {
 	}
 	if opts.InboundQueue <= 0 {
 		opts.InboundQueue = 64
+	}
+	if opts.MaxTopics <= 0 {
+		opts.MaxTopics = 100
 	}
 
 	h := &Hub{
@@ -209,6 +244,112 @@ func (h *Hub) Send(subject string, payload []byte) int {
 	return sent
 }
 
+// Publish 向订阅了指定主题的连接推送消息，返回成功入队的连接数。
+func (h *Hub) Publish(topic string, payload []byte) int {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return 0
+	}
+
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	for client := range h.clients {
+		if client.hasTopic(topic) {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	sent := 0
+	for _, client := range clients {
+		if client.enqueue(payload) {
+			sent++
+		}
+	}
+	return sent
+}
+
+// Topics 返回 Hub 当前所有连接订阅的主题快照（去重、排序）。
+func (h *Hub) Topics() []string {
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	for client := range h.clients {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, client := range clients {
+		for _, topic := range client.Topics() {
+			seen[topic] = struct{}{}
+		}
+	}
+
+	topics := make([]string, 0, len(seen))
+	for topic := range seen {
+		topics = append(topics, topic)
+	}
+	sort.Strings(topics)
+	return topics
+}
+
+// Subscribe 让指定主体（用户/设备）的全部连接订阅主题，返回订阅成功的连接数。
+func (h *Hub) Subscribe(subject, topic string) int {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return 0
+	}
+
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	for client := range h.clients {
+		if client.subject == subject {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	count := 0
+	for _, client := range clients {
+		if err := client.subscribe(topic); err != nil {
+			h.log.Warn("websocket subscribe failed",
+				logger.String("client_id", client.id),
+				logger.String("subject", client.subject),
+				logger.String("topic", topic),
+				logger.Error(err),
+			)
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+// Unsubscribe 让指定主体的全部连接取消订阅主题，返回取消成功的连接数。
+func (h *Hub) Unsubscribe(subject, topic string) int {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return 0
+	}
+
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	for client := range h.clients {
+		if client.subject == subject {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	count := 0
+	for _, client := range clients {
+		if client.unsubscribe(topic) {
+			count++
+		}
+	}
+	return count
+}
+
 // Clients 返回当前连接信息快照。
 func (h *Hub) Clients() []ClientInfo {
 	h.mu.RLock()
@@ -294,6 +435,9 @@ type Client struct {
 	inbound     chan []byte
 	closed      chan struct{}
 	closeOnce   sync.Once
+
+	topicsMu sync.RWMutex
+	topics   map[string]struct{}
 }
 
 func newClient(hub *Hub, conn *websocket.Conn, subject string) *Client {
@@ -306,7 +450,74 @@ func newClient(hub *Hub, conn *websocket.Conn, subject string) *Client {
 		send:        make(chan []byte, hub.opts.SendQueue),
 		inbound:     make(chan []byte, hub.opts.InboundQueue),
 		closed:      make(chan struct{}),
+		topics:      make(map[string]struct{}),
 	}
+}
+
+// Topics 返回该连接当前订阅的主题快照（排序）。
+func (c *Client) Topics() []string {
+	c.topicsMu.RLock()
+	topics := make([]string, 0, len(c.topics))
+	for topic := range c.topics {
+		topics = append(topics, topic)
+	}
+	c.topicsMu.RUnlock()
+
+	sort.Strings(topics)
+	return topics
+}
+
+// Subscribe 订阅主题；超过 MaxTopics 时返回错误。
+func (c *Client) Subscribe(topic string) error { return c.subscribe(topic) }
+
+// Unsubscribe 取消订阅主题，返回该主题此前是否已订阅。
+func (c *Client) Unsubscribe(topic string) bool { return c.unsubscribe(topic) }
+
+func (c *Client) subscribe(topic string) error {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return errTopicRequired
+	}
+
+	c.topicsMu.RLock()
+	_, exists := c.topics[topic]
+	c.topicsMu.RUnlock()
+	if exists {
+		return nil
+	}
+
+	c.topicsMu.Lock()
+	defer c.topicsMu.Unlock()
+	if _, exists = c.topics[topic]; exists {
+		return nil
+	}
+	if len(c.topics) >= c.hub.opts.MaxTopics {
+		return errTopicLimit
+	}
+	c.topics[topic] = struct{}{}
+	return nil
+}
+
+func (c *Client) unsubscribe(topic string) bool {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return false
+	}
+
+	c.topicsMu.Lock()
+	defer c.topicsMu.Unlock()
+	if _, exists := c.topics[topic]; !exists {
+		return false
+	}
+	delete(c.topics, topic)
+	return true
+}
+
+func (c *Client) hasTopic(topic string) bool {
+	c.topicsMu.RLock()
+	_, exists := c.topics[topic]
+	c.topicsMu.RUnlock()
+	return exists
 }
 
 func (c *Client) readPump() {
@@ -327,10 +538,66 @@ func (c *Client) readPump() {
 			)
 			return
 		}
-		if c.hub.opts.OnMessage != nil && !c.enqueueInbound(payload) {
+		if c.hub.opts.OnMessage != nil {
+			if !c.enqueueInbound(payload) {
+				return
+			}
+			continue
+		}
+		c.handleControl(payload)
+	}
+}
+
+// handleControl 处理内置 JSON 协议；业务设置 OnMessage 后不会走到这里。
+// 内部做 recover，避免异常 payload 终止读循环。
+func (c *Client) handleControl(payload []byte) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			c.hub.log.Warn("websocket control handler panic",
+				logger.String("client_id", c.id),
+				logger.String("subject", c.subject),
+				logger.String("panic", fmt.Sprint(recovered)),
+			)
+		}
+	}()
+
+	var req controlRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		c.reply(controlResponse{Type: "error", Message: "invalid json"})
+		return
+	}
+
+	switch req.Type {
+	case "subscribe":
+		if err := c.subscribe(req.Topic); err != nil {
+			c.reply(controlResponse{Type: "error", Topic: req.Topic, Message: err.Error()})
 			return
 		}
+		c.reply(controlResponse{Type: "subscribed", Topic: req.Topic})
+	case "unsubscribe":
+		c.unsubscribe(req.Topic)
+		c.reply(controlResponse{Type: "unsubscribed", Topic: req.Topic})
+	case "publish":
+		topic := strings.TrimSpace(req.Topic)
+		if topic == "" {
+			c.reply(controlResponse{Type: "error", Message: errTopicRequired.Error()})
+			return
+		}
+		c.hub.Publish(topic, append([]byte(nil), req.Data...))
+	case "ping":
+		c.reply(controlResponse{Type: "pong"})
+	default:
+		c.reply(controlResponse{Type: "error", Topic: req.Topic, Message: "unknown type"})
 	}
+}
+
+// reply 通过既有出站队列回送控制帧，不单独创建 goroutine。
+func (c *Client) reply(frame controlResponse) {
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		return
+	}
+	c.enqueue(payload)
 }
 
 // enqueueInbound 把上行消息放入处理队列，避免慢业务阻塞读循环。

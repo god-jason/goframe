@@ -17,6 +17,8 @@ import (
 	_ "github.com/god-jason/goframe/cache"
 	_ "github.com/god-jason/goframe/database"
 	_ "github.com/god-jason/goframe/event"
+	_ "github.com/god-jason/goframe/event/outbox"
+	_ "github.com/god-jason/goframe/license"
 	_ "github.com/god-jason/goframe/logger"
 	_ "github.com/god-jason/goframe/mqtt"
 	_ "github.com/god-jason/goframe/permission"
@@ -30,4 +32,5 @@ import (
 	_ "github.com/god-jason/goframe/upload"
 	_ "github.com/god-jason/goframe/web"
 	_ "github.com/god-jason/goframe/websocket"
+	_ "github.com/god-jason/goframe/weixin"
 )

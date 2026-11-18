@@ -13,8 +13,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,43 +30,60 @@ import (
 )
 
 func main() {
-	configFile := flag.String("config", "", "配置文件路径，默认自动搜索 configs/config.yaml")
-	flag.Parse()
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// run 启动示例服务并阻塞，直到 ctx 取消或服务异常退出，返回进程退出码。
+func run(args []string, stdout, stderr io.Writer) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return runContext(ctx, args, stdout, stderr)
+}
+
+// runContext 与 run 相同，但允许调用方注入可取消的 context 便于测试。
+func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("example", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	configFile := flags.String("config", "", "配置文件路径，默认自动搜索 configs/config.yaml")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	if *configFile != "" {
 		config.SetFile(*configFile)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	if err := boot.Startup(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "startup: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "startup: %v\n", err)
+		return 1
 	}
 
 	// 业务模块在基础设施就绪后手动初始化，并把路由注册到 web.API()。
 	module := demo.New()
 	if err := module.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "initialize module: %v\n", err)
-		shutdown()
-		os.Exit(1)
+		fmt.Fprintf(stderr, "initialize module: %v\n", err)
+		shutdown(stderr)
+		return 1
 	}
 	module.RegisterRoutes(web.API())
 
 	// HTTP 服务最后启动，阻塞到收到退出信号或服务异常。
 	if err := web.Run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "run web: %v\n", err)
+		fmt.Fprintf(stderr, "run web: %v\n", err)
 	}
 
-	shutdown()
+	shutdown(stderr)
+	return 0
 }
 
 // shutdown 逆序释放所有 boot 资源。
-func shutdown() {
+func shutdown(stderr io.Writer) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := boot.Shutdown(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "shutdown: %v\n", err)
+		fmt.Fprintf(stderr, "shutdown: %v\n", err)
 	}
 }

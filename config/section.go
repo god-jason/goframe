@@ -13,7 +13,7 @@ import (
 //
 //	var cfg = config.Register("logger", DefaultConfig())
 //
-//	func Config() *Config { return cfg.Get() }
+//	func GetConfig() *Config { return cfg.Get() }
 //
 // 加载配置时会把 YAML 中同名节点解码到独立副本，再原子替换当前值，
 // 因此热更新不会与读取方产生数据竞争。

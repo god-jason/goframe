@@ -10,6 +10,9 @@ import (
 
 const defaultMaxEntries = 100000
 
+// janitorInterval 是后台清理协程的检查间隔，测试可临时调小。
+var janitorInterval = time.Minute
+
 type memoryItem struct {
 	data      []byte
 	expiresAt time.Time
@@ -45,7 +48,7 @@ func NewMemoryWithOptions(opts MemoryOptions) *MemoryCache {
 		maxEntries: opts.MaxEntries,
 		stop:       make(chan struct{}),
 	}
-	go c.janitor()
+	go c.janitor(janitorInterval)
 	return c
 }
 
@@ -147,8 +150,8 @@ func (c *MemoryCache) Close() error {
 	return nil
 }
 
-func (c *MemoryCache) janitor() {
-	ticker := time.NewTicker(time.Minute)
+func (c *MemoryCache) janitor(interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {

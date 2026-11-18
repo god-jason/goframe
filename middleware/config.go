@@ -67,5 +67,5 @@ func DefaultConfig() Config {
 
 var cfg = config.Register("security", DefaultConfig())
 
-// Current 返回当前安全中间件配置快照。
-func Current() *Config { return cfg.Get() }
+// GetConfig 返回当前安全中间件配置快照。
+func GetConfig() *Config { return cfg.Get() }

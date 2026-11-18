@@ -8,6 +8,7 @@ import (
 	"github.com/god-jason/goframe/auth"
 	"github.com/god-jason/goframe/logger"
 	"github.com/god-jason/goframe/response"
+	"github.com/god-jason/goframe/trace"
 )
 
 // AccessLog 在请求完成后记录访问日志（状态码、耗时、请求 ID）。
@@ -45,6 +46,9 @@ func AccessLog(log logger.Logger, skipPaths ...string) gin.HandlerFunc {
 				logger.String("user_id", identity.UserID),
 				logger.String("tenant_id", identity.TenantID),
 			)
+		}
+		if traceID := trace.TraceID(c.Request.Context()); traceID != "" {
+			fields = append(fields, logger.String("trace_id", traceID))
 		}
 		log.Info("http request", fields...)
 	}

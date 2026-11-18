@@ -82,3 +82,31 @@ func (c *RedisCache) Ping(ctx context.Context) error { return c.client.Ping(ctx)
 
 // Close 关闭 Redis 连接。
 func (c *RedisCache) Close() error { return c.client.Close() }
+
+// Client 返回底层 Redis 客户端，供锁、限流、Pub/Sub 等扩展能力复用连接。
+func (c *RedisCache) Client() *redis.Client { return c.client }
+
+// Publish 向 Redis 频道发布消息。
+func (c *RedisCache) Publish(ctx context.Context, channel string, payload []byte) error {
+	if channel == "" {
+		return fmt.Errorf("cache: channel must not be empty")
+	}
+	if err := c.client.Publish(ctx, channel, payload).Err(); err != nil {
+		return fmt.Errorf("cache: publish %q: %w", channel, err)
+	}
+	return nil
+}
+
+// Subscribe 订阅一个或多个 Redis 频道，调用方需负责关闭返回的 PubSub。
+func (c *RedisCache) Subscribe(ctx context.Context, channels ...string) *redis.PubSub {
+	return c.client.Subscribe(ctx, channels...)
+}
+
+// Eval 执行 Lua 脚本。keys 为脚本访问的 Redis key，args 为附加参数。
+func (c *RedisCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
+	result, err := c.client.Eval(ctx, script, keys, args...).Result()
+	if err != nil {
+		return nil, fmt.Errorf("cache: eval: %w", err)
+	}
+	return result, nil
+}
