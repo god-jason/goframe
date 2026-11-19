@@ -25,8 +25,6 @@ func TestConfigValidateBranches(t *testing.T) {
 		{"negative read timeout", func(c *Config) { c.ReadTimeout = -time.Second }, false},
 		{"negative write timeout", func(c *Config) { c.WriteTimeout = -time.Second }, false},
 		{"negative idle timeout", func(c *Config) { c.IdleTimeout = -time.Second }, false},
-		{"negative request timeout", func(c *Config) { c.RequestTimeout = -time.Second }, false},
-		{"negative compression size", func(c *Config) { c.CompressionMinSize = -1 }, false},
 		{"zero shutdown timeout", func(c *Config) { c.ShutdownTimeout = 0 }, false},
 		{"api prefix without slash", func(c *Config) { c.APIPrefix = "api" }, false},
 		{"trusted ip", func(c *Config) { c.TrustedProxies = []string{"127.0.0.1"} }, true},

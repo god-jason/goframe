@@ -13,13 +13,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/logger"
 )
 
 func newHealthEngine(checker *Checker) *gin.Engine {
 	gin.SetMode(gin.TestMode)
+	api.Reset()
+	checker.Register()
 	engine := gin.New()
-	checker.Register(engine)
+	if err := api.MountRoot(engine); err != nil {
+		panic(err)
+	}
 	return engine
 }
 

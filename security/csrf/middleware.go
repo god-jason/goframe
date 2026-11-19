@@ -1,4 +1,4 @@
-package middleware
+package csrf
 
 import (
 	"net/http"
@@ -6,13 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/god-jason/goframe/api"
-	"github.com/god-jason/goframe/security/csrf"
 )
 
-// CSRF 为 Cookie 认证的非安全方法提供 CSRF 防护。
+// Middleware 为 Cookie 认证的非安全方法提供 CSRF 防护。
 // 纯 Bearer Token 接口按认证模式跳过 CSRF 校验；未签发 CSRF Cookie 的请求
 // 不携带 Cookie 身份，也不存在被其他站点利用的会话，因此直接放行。
-func CSRF(protector *csrf.Protector) gin.HandlerFunc {
+func Middleware(protector *Protector) gin.HandlerFunc {
 	if protector == nil {
 		return func(c *gin.Context) { c.Next() }
 	}

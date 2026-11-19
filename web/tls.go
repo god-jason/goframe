@@ -12,9 +12,8 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/god-jason/goframe/logger"
+	"github.com/god-jason/goframe/tlscfg"
 )
-
-const minTLSVersion = tls.VersionTLS12
 
 // tlsMaterial 是 TLS 运行所需的材料。
 // file 模式只有 config；acme 模式可能额外需要 HTTP-01 挑战服务器。
@@ -40,14 +39,11 @@ func buildTLSConfig(cfg TLSConfig, log logger.Logger) (*tlsMaterial, error) {
 		return &tlsMaterial{}, nil
 
 	case "file":
-		certificate, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
+		config, err := tlscfg.Server(cfg.CertFile, cfg.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("server: load certificate: %w", err)
+			return nil, err
 		}
-		return &tlsMaterial{config: &tls.Config{
-			MinVersion:   minTLSVersion,
-			Certificates: []tls.Certificate{certificate},
-		}}, nil
+		return &tlsMaterial{config: config}, nil
 
 	case "acme":
 		if len(cfg.ACME.Domains) == 0 {
@@ -76,7 +72,7 @@ func buildTLSConfig(cfg TLSConfig, log logger.Logger) (*tlsMaterial, error) {
 				return nil, err
 			}
 			return &tlsMaterial{config: &tls.Config{
-				MinVersion:     minTLSVersion,
+				MinVersion:     tlscfg.MinVersion,
 				GetCertificate: manager.GetCertificate,
 			}}, nil
 		}
@@ -95,7 +91,7 @@ func buildTLSConfig(cfg TLSConfig, log logger.Logger) (*tlsMaterial, error) {
 		}
 
 		tlsConfig := manager.TLSConfig()
-		tlsConfig.MinVersion = minTLSVersion
+		tlsConfig.MinVersion = tlscfg.MinVersion
 
 		material := &tlsMaterial{config: tlsConfig}
 		// HTTP-01 需要独立的 :80 监听；TLS-ALPN-01 由 TLS 握手自动完成。

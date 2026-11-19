@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/logger"
 )
 
@@ -117,11 +118,11 @@ func (c *Checker) SetReady(ready bool) { c.ready.Store(ready) }
 // IsReady 返回服务是否就绪。
 func (c *Checker) IsReady() bool { return c.ready.Load() }
 
-// Register 注册健康检查路由。
-func (c *Checker) Register(engine *gin.Engine) {
-	engine.GET("/health", c.HandleHealth)
-	engine.GET("/health/live", c.HandleLive)
-	engine.GET("/health/ready", c.HandleReady)
+// Register 把健康检查接口登记为框架根路径接口，由 web 启动时统一挂载。
+func (c *Checker) Register() {
+	api.RegisterRoot(http.MethodGet, "/health", c.HandleHealth)
+	api.RegisterRoot(http.MethodGet, "/health/live", c.HandleLive)
+	api.RegisterRoot(http.MethodGet, "/health/ready", c.HandleReady)
 }
 
 // HandleLive 处理存活探针。

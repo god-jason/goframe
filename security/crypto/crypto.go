@@ -4,11 +4,20 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
 )
+
+// HMACSHA256 返回 key 对 message 的 HMAC-SHA256 摘要。
+func HMACSHA256(key, message []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(message)
+	return mac.Sum(nil)
+}
 
 // Encryptor 是框架统一加密接口。
 type Encryptor interface {

@@ -12,11 +12,9 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -237,33 +235,6 @@ func (c *Client) Unsubscribe(ctx context.Context, topics ...string) error {
 		return ErrNotConnected
 	}
 	return waitToken(ctx, c.client.Unsubscribe(topics...))
-}
-
-// BuildTLSConfig 根据 CA/客户端证书构建 MQTT TLS 配置。
-func BuildTLSConfig(caFile, certFile, keyFile, serverName string) (*tls.Config, error) {
-	cfg := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		ServerName: serverName,
-	}
-	if caFile != "" {
-		data, err := os.ReadFile(caFile)
-		if err != nil {
-			return nil, fmt.Errorf("mqtt: read ca file: %w", err)
-		}
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM(data) {
-			return nil, fmt.Errorf("mqtt: invalid ca file")
-		}
-		cfg.RootCAs = pool
-	}
-	if certFile != "" || keyFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			return nil, fmt.Errorf("mqtt: load client certificate: %w", err)
-		}
-		cfg.Certificates = []tls.Certificate{cert}
-	}
-	return cfg, nil
 }
 
 // waitToken 将 paho Token 等待与 context 取消结合。

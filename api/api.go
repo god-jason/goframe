@@ -41,6 +41,9 @@ type API struct {
 	Access   Access
 	Method   string
 	Path     string
+	// Root 为 true 表示框架根路径接口，由 MountRoot 挂到引擎根路径，
+	// 不受业务 APIPrefix 影响；否则由 Mount 挂到指定分组。
+	Root     bool
 	Handlers []gin.HandlerFunc
 }
 
@@ -64,14 +67,30 @@ func RegisterAdmin(method, path string, handlers ...gin.HandlerFunc) {
 // RegisterAs 按指定访问级别登记接口。可在模块 init 或 Init 中调用。
 // 同方法同路径重复登记时覆盖先前条目，便于进程内重启与测试。
 func RegisterAs(access Access, method, path string, handlers ...gin.HandlerFunc) {
-	entry := &API{
+	upsert(&API{
 		Access:   access,
 		Method:   strings.ToUpper(strings.TrimSpace(method)),
 		Path:     path,
 		Handlers: handlers,
-	}
+	})
+}
+
+// RegisterRoot 登记一个框架根路径接口：公开访问，由 MountRoot 挂到引擎根路径，
+// 不受业务 APIPrefix 影响。供框架自带端点（健康检查、指标、系统信息等）使用。
+func RegisterRoot(method, path string, handlers ...gin.HandlerFunc) {
+	upsert(&API{
+		Access:   Public,
+		Method:   strings.ToUpper(strings.TrimSpace(method)),
+		Path:     path,
+		Root:     true,
+		Handlers: handlers,
+	})
+}
+
+// upsert 写入注册表，挂载层级、方法、路径均相同时覆盖先前条目。
+func upsert(entry *API) {
 	for i, existing := range entries {
-		if existing.Method == entry.Method && existing.Path == entry.Path {
+		if existing.Root == entry.Root && existing.Method == entry.Method && existing.Path == entry.Path {
 			entries[i] = entry
 			return
 		}
@@ -103,13 +122,24 @@ func WithGuard(access Access, handlers ...gin.HandlerFunc) Option {
 	}
 }
 
-// Mount 把全部已登记接口挂载到 group。
+// Mount 把全部已登记的业务接口挂载到 group（框架根路径接口除外，见 MountRoot）。
 //
 // 默认守卫：Login 级别要求完成认证（Authenticate 解析令牌 + RequireAuth 强制登录），
 // Admin 级别在登录之上再执行 permission 授权检查。
 // 必须在 boot.Startup 之后调用，以便 auth.Get() 与 permission.Get() 已就绪。
 // 方法或路径非法时返回错误，且不会挂载任何接口。
 func Mount(group gin.IRoutes, opts ...Option) error {
+	return mount(group, false, opts...)
+}
+
+// MountRoot 把全部已登记的框架根路径接口（见 RegisterRoot）挂载到引擎。
+// 由 web 在启动装配时自动调用，业务通常无需手动调用。
+func MountRoot(engine gin.IRoutes, opts ...Option) error {
+	return mount(engine, true, opts...)
+}
+
+// mount 按挂载层级筛选条目并统一执行校验与挂载。
+func mount(target gin.IRoutes, rootOnly bool, opts ...Option) error {
 	options := &mountOptions{guards: defaultGuards()}
 	for _, opt := range opts {
 		if opt != nil {
@@ -117,7 +147,14 @@ func Mount(group gin.IRoutes, opts ...Option) error {
 		}
 	}
 
+	var selected []*API
 	for _, entry := range entries {
+		if entry.Root == rootOnly {
+			selected = append(selected, entry)
+		}
+	}
+
+	for _, entry := range selected {
 		if !validMethod(entry.Method) {
 			return fmt.Errorf("api: invalid method %q for %s", entry.Method, entry.Path)
 		}
@@ -126,11 +163,11 @@ func Mount(group gin.IRoutes, opts ...Option) error {
 		}
 	}
 
-	for _, entry := range entries {
+	for _, entry := range selected {
 		handlers := make([]gin.HandlerFunc, 0, len(options.guards[entry.Access])+len(entry.Handlers))
 		handlers = append(handlers, options.guards[entry.Access]...)
 		handlers = append(handlers, entry.Handlers...)
-		group.Handle(entry.Method, entry.Path, handlers...)
+		target.Handle(entry.Method, entry.Path, handlers...)
 	}
 	return nil
 }

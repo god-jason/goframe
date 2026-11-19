@@ -9,6 +9,14 @@ import (
 	"github.com/god-jason/goframe/config"
 )
 
+// RequestConfig 是请求限制配置。
+type RequestConfig struct {
+	MaxBodySize     config.ByteSize `mapstructure:"max_body_size"`
+	MaxQueryLength  int             `mapstructure:"max_query_length"`
+	AllowedMethods  []string        `mapstructure:"allowed_methods"`
+	RequireJSONBody bool            `mapstructure:"require_json_body"`
+}
+
 // Config 是 HTTP 服务配置。
 type Config struct {
 	Host              string        `mapstructure:"host"`
@@ -23,12 +31,8 @@ type Config struct {
 	TrustedProxies    []string      `mapstructure:"trusted_proxies"`
 	APIPrefix         string        `mapstructure:"api_prefix"`
 	APIVersion        string        `mapstructure:"api_version"`
-	// Compression 控制是否对响应启用 gzip 压缩。
-	Compression bool `mapstructure:"compression"`
-	// CompressionMinSize 是触发压缩的最小响应体大小。
-	CompressionMinSize int `mapstructure:"compression_min_size"`
-	// RequestTimeout 是单请求超时；0 表示不限制。
-	RequestTimeout time.Duration `mapstructure:"request_timeout"`
+	// Request 是请求方法白名单与请求体等限制配置。
+	Request RequestConfig `mapstructure:"request"`
 }
 
 // Addr 返回监听地址。
@@ -46,12 +50,6 @@ func (c Config) Validate() error {
 	}
 	if c.ReadTimeout < 0 || c.WriteTimeout < 0 || c.IdleTimeout < 0 {
 		return fmt.Errorf("server: timeouts must not be negative")
-	}
-	if c.RequestTimeout < 0 {
-		return fmt.Errorf("server: request_timeout must not be negative")
-	}
-	if c.CompressionMinSize < 0 {
-		return fmt.Errorf("server: compression_min_size must not be negative")
 	}
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("server: shutdown_timeout must be greater than 0")
@@ -73,19 +71,23 @@ func (c Config) Validate() error {
 // DefaultConfig 返回 HTTP 服务默认配置。
 func DefaultConfig() Config {
 	return Config{
-		Host:               "0.0.0.0",
-		Port:               8080,
-		Mode:               "release",
-		ReadTimeout:        30 * time.Second,
-		ReadHeaderTimeout:  10 * time.Second,
-		WriteTimeout:       30 * time.Second,
-		IdleTimeout:        60 * time.Second,
-		ShutdownTimeout:    30 * time.Second,
-		MaxHeaderBytes:     1 << 20,
-		APIPrefix:          "/api",
-		APIVersion:         "v1",
-		Compression:        true,
-		CompressionMinSize: 1024,
+		Host:              "0.0.0.0",
+		Port:              8080,
+		Mode:              "release",
+		ReadTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		ShutdownTimeout:   30 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+		APIPrefix:         "/api",
+		APIVersion:        "v1",
+		Request: RequestConfig{
+			MaxBodySize:     10 << 20,
+			MaxQueryLength:  4096,
+			AllowedMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			RequireJSONBody: true,
+		},
 	}
 }
 

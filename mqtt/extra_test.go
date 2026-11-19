@@ -258,30 +258,6 @@ func TestNewFillsOptionalSettings(t *testing.T) {
 	}
 }
 
-func TestBuildTLSConfigWithValidFiles(t *testing.T) {
-	dir := t.TempDir()
-	certPEM, keyPEM := testCertificate(t)
-	caFile := filepath.Join(dir, "ca.pem")
-	certFile := filepath.Join(dir, "client.crt")
-	keyFile := filepath.Join(dir, "client.key")
-	for name, data := range map[string][]byte{caFile: certPEM, certFile: certPEM, keyFile: keyPEM} {
-		if err := os.WriteFile(name, data, 0o600); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
-	}
-
-	cfg, err := BuildTLSConfig(caFile, certFile, keyFile, "mqtt.example.com")
-	if err != nil {
-		t.Fatalf("BuildTLSConfig: %v", err)
-	}
-	if cfg.RootCAs == nil || len(cfg.Certificates) != 1 || cfg.ServerName != "mqtt.example.com" {
-		t.Fatalf("unexpected tls config: %+v", cfg)
-	}
-	if cfg.MinVersion == 0 {
-		t.Fatal("expected TLS min version")
-	}
-}
-
 func TestAutoReconnect(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

@@ -1,4 +1,4 @@
-package middleware
+package idempotency
 
 import (
 	"context"
@@ -82,14 +82,14 @@ func TestIdempotencyStoreFailures(t *testing.T) {
 	handler := func(c *gin.Context) { c.Status(http.StatusOK) }
 
 	getFailure := &failingStore{getErr: errors.New("get failed")}
-	engine := newTestEngine(Idempotency(getFailure, time.Minute))
+	engine := newTestEngine(Middleware(getFailure, time.Minute))
 	engine.POST("/x", handler)
 	if recorder := doRequest(engine, http.MethodPost, "/x", nil, map[string]string{HeaderIdempotencyKey: key}); recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("get failure status = %d", recorder.Code)
 	}
 
 	setFailure := &failingStore{setErr: errors.New("set failed")}
-	engine = newTestEngine(Idempotency(setFailure, time.Minute))
+	engine = newTestEngine(Middleware(setFailure, time.Minute))
 	engine.POST("/x", handler)
 	if recorder := doRequest(engine, http.MethodPost, "/x", nil, map[string]string{HeaderIdempotencyKey: key}); recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("set failure status = %d", recorder.Code)
@@ -98,7 +98,7 @@ func TestIdempotencyStoreFailures(t *testing.T) {
 
 func TestIdempotencyAbortedRequestClearsKey(t *testing.T) {
 	store := NewMemoryStore()
-	engine := newTestEngine(Idempotency(store, time.Minute), func(c *gin.Context) {
+	engine := newTestEngine(Middleware(store, time.Minute), func(c *gin.Context) {
 		c.Abort()
 	})
 	engine.POST("/abort", func(c *gin.Context) { c.Status(http.StatusOK) })
@@ -117,10 +117,9 @@ func TestIdempotencyAbortedRequestClearsKey(t *testing.T) {
 }
 
 func TestIdempotencyPanicClearsKey(t *testing.T) {
-	log, _ := newTestLogger(t)
 	store := NewMemoryStore()
 	var calls int32
-	engine := newTestEngine(Recovery(log), Idempotency(store, time.Minute))
+	engine := newTestEngine(gin.Recovery(), Middleware(store, time.Minute))
 	engine.POST("/panic", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		panic("boom")
@@ -140,7 +139,7 @@ func TestIdempotencyPanicClearsKey(t *testing.T) {
 
 func TestIdempotencyPassThrough(t *testing.T) {
 	var calls int32
-	engine := newTestEngine(Idempotency(nil, time.Minute))
+	engine := newTestEngine(Middleware(nil, time.Minute))
 	engine.POST("/nil", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		c.Status(http.StatusOK)
@@ -150,7 +149,7 @@ func TestIdempotencyPassThrough(t *testing.T) {
 	}
 
 	store := NewMemoryStore()
-	withoutKey := newTestEngine(Idempotency(store, 0))
+	withoutKey := newTestEngine(Middleware(store, 0))
 	withoutKey.POST("/nokey", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		c.Status(http.StatusOK)

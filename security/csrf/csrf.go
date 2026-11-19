@@ -2,9 +2,7 @@
 package csrf
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/binary"
@@ -14,7 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/errors"
+	apperrors "github.com/god-jason/goframe/errors"
+	"github.com/god-jason/goframe/security/crypto"
 )
 
 // Protector 负责签发与校验 CSRF Token。
@@ -64,32 +63,32 @@ func (p *Protector) Token(c *gin.Context) (string, error) {
 func (p *Protector) Validate(c *gin.Context) error {
 	cookie, err := c.Cookie(p.cookieName)
 	if err != nil || cookie == "" {
-		return errors.Forbidden("csrf token missing")
+		return apperrors.Forbidden("csrf token missing")
 	}
 	header := c.GetHeader(p.headerName)
 	if header == "" {
-		return errors.Forbidden("csrf token missing")
+		return apperrors.Forbidden("csrf token missing")
 	}
 	if subtle.ConstantTimeCompare([]byte(cookie), []byte(header)) != 1 {
-		return errors.Forbidden("csrf token mismatch")
+		return apperrors.Forbidden("csrf token mismatch")
 	}
 
 	payload, signature, ok := splitToken(header)
 	if !ok {
-		return errors.Forbidden("invalid csrf token")
+		return apperrors.Forbidden("invalid csrf token")
 	}
 	expected := p.sign(payload)
 	if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
-		return errors.Forbidden("invalid csrf token")
+		return apperrors.Forbidden("invalid csrf token")
 	}
 
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil || len(raw) < 8 {
-		return errors.Forbidden("invalid csrf token")
+		return apperrors.Forbidden("invalid csrf token")
 	}
 	issuedAt := time.Unix(int64(binary.BigEndian.Uint64(raw[:8])), 0)
 	if time.Since(issuedAt) > p.ttl {
-		return errors.Forbidden("csrf token expired")
+		return apperrors.Forbidden("csrf token expired")
 	}
 	return nil
 }
@@ -101,9 +100,7 @@ func (p *Protector) CookieName() string { return p.cookieName }
 func (p *Protector) HeaderName() string { return p.headerName }
 
 func (p *Protector) sign(payload string) string {
-	mac := hmac.New(sha256.New, p.secret)
-	mac.Write([]byte(payload))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return base64.RawURLEncoding.EncodeToString(crypto.HMACSHA256(p.secret, []byte(payload)))
 }
 
 func splitToken(token string) (payload, signature string, ok bool) {

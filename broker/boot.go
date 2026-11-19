@@ -2,12 +2,12 @@ package broker
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
+	"github.com/god-jason/goframe/tlscfg"
 )
 
 var (
@@ -78,14 +78,11 @@ func Startup(ctx context.Context) error {
 	}
 
 	if current.TLS.Enabled {
-		certificate, err := tls.LoadX509KeyPair(current.TLS.CertFile, current.TLS.KeyFile)
+		tlsConfig, err := tlscfg.Server(current.TLS.CertFile, current.TLS.KeyFile)
 		if err != nil {
-			return fmt.Errorf("broker: load tls certificate: %w", err)
+			return fmt.Errorf("broker: %w", err)
 		}
-		options.TLSConfig = &tls.Config{
-			Certificates: []tls.Certificate{certificate},
-			MinVersion:   tls.VersionTLS12,
-		}
+		options.TLSConfig = tlsConfig
 	}
 
 	server := New(options)

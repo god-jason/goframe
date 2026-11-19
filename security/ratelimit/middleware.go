@@ -1,4 +1,4 @@
-package middleware
+package ratelimit
 
 import (
 	"github.com/gin-gonic/gin"
@@ -6,12 +6,11 @@ import (
 	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
-	"github.com/god-jason/goframe/security/ratelimit"
 )
 
-// RateLimit 创建限流中间件。keyFunc 为空时按客户端 IP 限流。
+// Middleware 创建限流中间件。keyFunc 为空时按客户端 IP 限流。
 // failOpen 为 true 时，限流组件异常将放行普通请求；高风险接口应失败关闭。
-func RateLimit(limiter ratelimit.Limiter, keyFunc func(*gin.Context) string, failOpen bool) gin.HandlerFunc {
+func Middleware(limiter Limiter, keyFunc func(*gin.Context) string, failOpen bool) gin.HandlerFunc {
 	if limiter == nil {
 		return func(c *gin.Context) { c.Next() }
 	}

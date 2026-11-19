@@ -14,6 +14,8 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
+
+	"github.com/god-jason/goframe/api"
 )
 
 type envelope[T any] struct {
@@ -31,19 +33,30 @@ func testConfig() Config {
 	return cfg
 }
 
-func TestRegisterDisabled(t *testing.T) {
+// mountTestEngine 把当前注册表中的框架根路径接口挂载到新引擎。
+func mountTestEngine(t *testing.T) *gin.Engine {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	register(engine, DefaultConfig())
+	if err := api.MountRoot(engine); err != nil {
+		t.Fatalf("mount root: %v", err)
+	}
+	return engine
+}
+
+func TestRegisterDisabled(t *testing.T) {
+	api.Reset()
+	register(DefaultConfig())
+	engine := mountTestEngine(t)
 	if len(engine.Routes()) != 0 {
 		t.Fatalf("routes = %d, want 0", len(engine.Routes()))
 	}
 }
 
 func TestHandlers(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	register(engine, testConfig())
+	api.Reset()
+	register(testConfig())
+	engine := mountTestEngine(t)
 
 	var snapshot envelope[Snapshot]
 	getJSON(t, engine, "/system", &snapshot)
@@ -294,9 +307,9 @@ func TestPublicCollectors(t *testing.T) {
 }
 
 func TestRegisterPublic(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	Register(engine)
+	api.Reset()
+	Register()
+	engine := mountTestEngine(t)
 	if len(engine.Routes()) != 0 {
 		t.Fatalf("routes = %d, want 0 when disabled", len(engine.Routes()))
 	}
@@ -333,9 +346,9 @@ func TestHandlerErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			useFakeCollectors(t)
 			tc.configure()
-			gin.SetMode(gin.TestMode)
-			engine := gin.New()
-			register(engine, testConfig())
+			api.Reset()
+			register(testConfig())
+			engine := mountTestEngine(t)
 
 			recorder := httptest.NewRecorder()
 			engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tc.path, nil))
@@ -351,9 +364,9 @@ func TestHandlerTimeout(t *testing.T) {
 	cpuPercentWithContext = func(context.Context, time.Duration, bool) ([]float64, error) {
 		return nil, context.DeadlineExceeded
 	}
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	register(engine, testConfig())
+	api.Reset()
+	register(testConfig())
+	engine := mountTestEngine(t)
 
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system/cpu", nil))
@@ -367,9 +380,9 @@ func TestHandlerTimeoutFromRequestContext(t *testing.T) {
 	cpuPercentWithContext = func(context.Context, time.Duration, bool) ([]float64, error) {
 		return nil, errors.New("generic")
 	}
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	register(engine, testConfig())
+	api.Reset()
+	register(testConfig())
+	engine := mountTestEngine(t)
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
@@ -381,7 +394,7 @@ func TestHandlerTimeoutFromRequestContext(t *testing.T) {
 	}
 }
 
-func TestNormalizePath(t *testing.T) {
+func TestResolvePath(t *testing.T) {
 	cases := map[string]string{
 		"":             "/system",
 		"   ":          "/system",
@@ -392,8 +405,8 @@ func TestNormalizePath(t *testing.T) {
 		"/metrics":     "/metrics",
 	}
 	for input, want := range cases {
-		if got := normalizePath(input); got != want {
-			t.Fatalf("normalizePath(%q) = %q, want %q", input, got, want)
+		if got := resolvePath(input); got != want {
+			t.Fatalf("resolvePath(%q) = %q, want %q", input, got, want)
 		}
 	}
 }

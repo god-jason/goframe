@@ -11,7 +11,6 @@ import (
 	"github.com/god-jason/goframe/config"
 	apperrors "github.com/god-jason/goframe/errors"
 	"github.com/god-jason/goframe/logger"
-	"github.com/god-jason/goframe/middleware"
 	"github.com/god-jason/goframe/permission"
 	"github.com/god-jason/goframe/security/audit"
 	"github.com/god-jason/goframe/security/csrf"
@@ -54,7 +53,7 @@ func NewHandler(service *Service, manager auth.Manager, authorizer permission.Au
 func (h *Handler) RegisterAPIs() {
 	api.RegisterPublic("GET", "/public/ping", h.ping)
 	api.RegisterPublic("GET", "/public/csrf-token", h.csrfToken)
-	api.RegisterPublic("POST", "/auth/login", middleware.RateLimit(h.loginLimiter, middleware.ClientIPKey, false), h.login)
+	api.RegisterPublic("POST", "/auth/login", ratelimit.Middleware(h.loginLimiter, ratelimit.ClientIPKey, false), h.login)
 	api.RegisterPublic("POST", "/auth/refresh", h.refresh)
 	api.Register("POST", "/auth/logout", h.logout)
 	api.Register("GET", "/user/me", h.me)

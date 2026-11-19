@@ -7,6 +7,7 @@ import (
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/config"
 	"github.com/god-jason/goframe/logger"
+	"github.com/god-jason/goframe/tlscfg"
 )
 
 var (
@@ -55,7 +56,7 @@ func Startup(ctx context.Context) error {
 		AutoReconnect:     current.AutoReconnect,
 	}
 	if current.TLS.Enabled {
-		tlsConfig, err := BuildTLSConfig(
+		tlsConfig, err := tlscfg.Client(
 			current.TLS.CAFile,
 			current.TLS.CertFile,
 			current.TLS.KeyFile,

@@ -12,12 +12,14 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 
+	"github.com/god-jason/goframe/accesslog"
 	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/cache"
@@ -27,7 +29,6 @@ import (
 	"github.com/god-jason/goframe/health"
 	"github.com/god-jason/goframe/license"
 	"github.com/god-jason/goframe/logger"
-	"github.com/god-jason/goframe/middleware"
 	"github.com/god-jason/goframe/monitor"
 	"github.com/god-jason/goframe/openapi"
 	"github.com/god-jason/goframe/security/csrf"
@@ -140,14 +141,11 @@ func Startup(ctx context.Context) error {
 		_ = engine.SetTrustedProxies(nil)
 	}
 
-	if err := setupMiddleware(engine, *cfg); err != nil {
-		return err
-	}
+	setupMiddleware(engine, *cfg)
 	apiRouter := api.New(engine, api.Options{
 		APIPrefix:  cfg.APIPrefix,
 		APIVersion: cfg.APIVersion,
 	})
-	_ = apiRouter
 
 	checker := health.New(config.App().Version)
 	checker.SetLogger(logger.Get())
@@ -159,21 +157,25 @@ func Startup(ctx context.Context) error {
 			_ = checker.Add(health.CacheCheck("cache", pinger))
 		}
 	}
-	checker.Register(engine)
+	checker.Register()
 
 	metrics := monitor.NewMetrics()
-	engine.GET("/metrics", metrics.Handler())
+	api.RegisterRoot(http.MethodGet, "/metrics", metrics.Handler())
 
 	if pprofConfig := PProf(); pprofConfig.Enabled {
 		pprof.Register(engine, pprofConfig.Path)
 	}
 
-	openapi.Register(engine)
-	sysinfo.Register(engine)
-	license.Register(engine)
+	openapi.Register()
+	sysinfo.Register()
+	license.Register()
 
 	if hub := websocket.Get(); hub != nil {
-		engine.GET(websocket.GetConfig().Path, hub.Handler())
+		api.RegisterRoot(http.MethodGet, api.NormalizePath(websocket.GetConfig().Path), hub.Handler())
+	}
+
+	if err := api.MountRoot(engine); err != nil {
+		return fmt.Errorf("server: mount framework routes: %w", err)
 	}
 
 	if err := setupNoRoute(engine, *cfg); err != nil {
@@ -254,40 +256,22 @@ func Run(ctx context.Context) error {
 	}
 }
 
-func setupMiddleware(engine *gin.Engine, cfg Config) error {
-	securityCfg := middleware.GetConfig()
-
-	handlers := make([]gin.HandlerFunc, 0, 12)
-	if cfg.RequestTimeout > 0 {
-		handlers = append(handlers, middleware.Timeout(cfg.RequestTimeout))
+func setupMiddleware(engine *gin.Engine, cfg Config) {
+	handlers := make([]gin.HandlerFunc, 0, 8)
+	handlers = append(handlers,
+		gin.Recovery(),
+		trace.Middleware(),
+		csrf.Middleware(csrf.Get()),
+	)
+	if limiter := ratelimit.Get(); limiter != nil {
+		handlers = append(handlers, ratelimit.Middleware(limiter, nil, ratelimit.GetConfig().FailOpen))
 	}
 	handlers = append(handlers,
-		middleware.RequestID(),
-		trace.Middleware(),
-		middleware.Recovery(logger.Get()),
+		methodFilter(cfg.Request.AllowedMethods),
+		requestLimits(cfg.Request),
+		accesslog.Middleware(logger.Get(), "/health", "/health/live", "/health/ready", "/metrics"),
 	)
-	if cfg.Compression {
-		handlers = append(handlers, middleware.Gzip(middleware.GzipMinSize(cfg.CompressionMinSize)))
-	}
-	if securityCfg.Enabled {
-		if securityCfg.Headers.Enabled {
-			handlers = append(handlers, middleware.SecurityHeaders(securityCfg.Headers))
-		}
-		handlers = append(handlers, middleware.MethodFilter(securityCfg.Request.AllowedMethods))
-		corsHandler, err := middleware.CORS(securityCfg.CORS)
-		if err != nil {
-			return err
-		}
-		handlers = append(handlers, corsHandler)
-		if limiter := ratelimit.Get(); limiter != nil {
-			handlers = append(handlers, middleware.RateLimit(limiter, nil, ratelimit.GetConfig().FailOpen))
-		}
-		handlers = append(handlers, middleware.RequestLimits(securityCfg.Request))
-		handlers = append(handlers, middleware.CSRF(csrf.Get()))
-	}
-	handlers = append(handlers, middleware.AccessLog(logger.Get(), "/health", "/health/live", "/health/ready", "/metrics"))
 	engine.Use(handlers...)
-	return nil
 }
 
 func setupNoRoute(engine *gin.Engine, cfg Config) error {

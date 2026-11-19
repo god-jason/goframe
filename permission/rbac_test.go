@@ -23,7 +23,7 @@ func TestHasPermission(t *testing.T) {
 		{nil, "user:read", false},
 	}
 	for _, tc := range cases {
-		if got := HasPermission(tc.permissions, tc.action); got != tc.want {
+		if got := auth.HasPermission(tc.permissions, tc.action); got != tc.want {
 			t.Fatalf("HasPermission(%v, %q) = %v, want %v", tc.permissions, tc.action, got, tc.want)
 		}
 	}

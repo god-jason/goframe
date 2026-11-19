@@ -3,6 +3,7 @@ package permission
 import (
 	"net/http"
 
+	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
 )
 
@@ -20,7 +21,7 @@ func CheckResource(subject Subject, permissions []string, action string, resourc
 		return apperrors.New(apperrors.CodeTenantDenied, http.StatusForbidden, "resource belongs to another tenant")
 	}
 	if resource.OwnerID != "" && subject.UserID != "" && resource.OwnerID != subject.UserID {
-		if !HasPermission(permissions, action+ResourceWideSuffix) && !HasPermission(permissions, "*"+ResourceWideSuffix) {
+		if !auth.HasPermission(permissions, action+ResourceWideSuffix) && !auth.HasPermission(permissions, "*"+ResourceWideSuffix) {
 			return apperrors.New(apperrors.CodePermissionDenied, http.StatusForbidden, "permission denied for this resource")
 		}
 	}

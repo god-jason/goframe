@@ -67,6 +67,10 @@ func (r *Router) NoRoute(handlers ...gin.HandlerFunc) {
 	r.engine.NoRoute(handlers...)
 }
 
+// NormalizePath 清理路径：补前导斜杠、折叠重复斜杠、去尾部斜杠。
+// 空路径返回 "/"，调用方需要自行回退到默认值。
+func NormalizePath(path string) string { return joinPath(path) }
+
 // joinPath 拼接路径并清理多余的斜杠。
 func joinPath(parts ...string) string {
 	var segments []string

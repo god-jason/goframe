@@ -3,7 +3,6 @@ package permission
 
 import (
 	"context"
-	"strings"
 
 	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
@@ -44,19 +43,6 @@ func SubjectFromIdentity(identity *auth.Identity) Subject {
 		Roles:       append([]string(nil), identity.Roles...),
 		Permissions: append([]string(nil), identity.Permissions...),
 	}
-}
-
-// HasPermission 判断权限列表是否包含指定动作，支持 * 与前缀通配。
-func HasPermission(permissions []string, action string) bool {
-	for _, item := range permissions {
-		if item == "*" || item == action {
-			return true
-		}
-		if strings.HasSuffix(item, ":*") && strings.HasPrefix(action, strings.TrimSuffix(item, "*")) {
-			return true
-		}
-	}
-	return false
 }
 
 // Authorize 是一次授权检查的便捷封装。

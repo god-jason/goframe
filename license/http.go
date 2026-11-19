@@ -1,6 +1,7 @@
 package license
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -9,14 +10,14 @@ import (
 	apperrors "github.com/god-jason/goframe/errors"
 )
 
-// Register 注册许可状态查询接口。未启用或路径为空时不做任何注册。
-func Register(engine *gin.Engine) {
+// Register 把许可状态查询接口登记为框架根路径接口，由 web 启动时统一挂载。
+// 未启用或路径为空时不做任何登记。
+func Register() {
 	cfg := GetConfig()
-	if engine == nil || !cfg.Enabled || strings.TrimSpace(cfg.StatusPath) == "" {
+	if !cfg.Enabled || strings.TrimSpace(cfg.StatusPath) == "" {
 		return
 	}
-	path := normalizePath(cfg.StatusPath)
-	engine.GET(path, statusHandler())
+	api.RegisterRoot(http.MethodGet, resolvePath(cfg.StatusPath), statusHandler())
 }
 
 // RequireValid 要求当前许可有效（含宽限期）。
@@ -65,18 +66,11 @@ func statusHandler() gin.HandlerFunc {
 	}
 }
 
-// normalizePath 补全前导斜杠并去掉尾部斜杠。
-func normalizePath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		path = DefaultConfig().StatusPath
+// resolvePath 规范化路径，空值或根路径回退到默认状态路径。
+func resolvePath(path string) string {
+	resolved := api.NormalizePath(path)
+	if resolved == "/" {
+		resolved = api.NormalizePath(DefaultConfig().StatusPath)
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	path = strings.TrimRight(path, "/")
-	if path == "" {
-		path = DefaultConfig().StatusPath
-	}
-	return path
+	return resolved
 }

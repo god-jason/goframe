@@ -1,4 +1,5 @@
-package middleware
+// Package idempotency 提供基于 Idempotency-Key 请求头的 HTTP 幂等中间件与记录存储。
+package idempotency
 
 import (
 	"bufio"
@@ -114,10 +115,10 @@ func (s *MemoryStore) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Idempotency 为 POST/PUT/PATCH 请求提供幂等处理。
+// Middleware 为 POST/PUT/PATCH 请求提供幂等处理。
 // 客户端通过 Idempotency-Key 头标识请求；相同 key 的已完成请求会直接回放缓存响应，
 // 正在执行的相同 key 返回 409。5xx 响应不缓存，允许客户端重试。
-func Idempotency(store Store, ttl time.Duration) gin.HandlerFunc {
+func Middleware(store Store, ttl time.Duration) gin.HandlerFunc {
 	if store == nil {
 		return func(c *gin.Context) { c.Next() }
 	}

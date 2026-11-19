@@ -7,11 +7,18 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/god-jason/goframe/api"
 )
 
-func newTestEngine() *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	return gin.New()
+// mountTestEngine 把当前注册表中的框架根路径接口挂载到新引擎。
+func mountTestEngine(t *testing.T) *gin.Engine {
+	t.Helper()
+	engine := gin.New()
+	if err := api.MountRoot(engine); err != nil {
+		t.Fatalf("mount root: %v", err)
+	}
+	return engine
 }
 
 func TestDefaultConfig(t *testing.T) {
@@ -28,8 +35,9 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestRegisterDisabled(t *testing.T) {
-	engine := newTestEngine()
-	Register(engine)
+	api.Reset()
+	Register()
+	engine := mountTestEngine(t)
 
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/swagger", nil))
@@ -39,8 +47,9 @@ func TestRegisterDisabled(t *testing.T) {
 }
 
 func TestRegisterEnabled(t *testing.T) {
-	engine := newTestEngine()
-	register(engine, Config{Enabled: true, Path: "/swagger"})
+	api.Reset()
+	register(Config{Enabled: true, Path: "/swagger"})
+	engine := mountTestEngine(t)
 
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/swagger", nil))
@@ -67,7 +76,7 @@ func TestHandlerNotEmpty(t *testing.T) {
 	}
 }
 
-func TestNormalizePath(t *testing.T) {
+func TestResolvePath(t *testing.T) {
 	cases := map[string]string{
 		"":             "/swagger",
 		"swagger":      "/swagger",
@@ -77,19 +86,16 @@ func TestNormalizePath(t *testing.T) {
 		"/":            "/swagger",
 	}
 	for input, want := range cases {
-		if got := normalizePath(input); got != want {
-			t.Fatalf("normalizePath(%q) = %q, want %q", input, got, want)
+		if got := resolvePath(input); got != want {
+			t.Fatalf("resolvePath(%q) = %q, want %q", input, got, want)
 		}
 	}
 }
 
-func TestRegisterNilEngine(t *testing.T) {
-	register(nil, Config{Enabled: true, Path: "/swagger"})
-}
-
 func TestRegisterEmptyPath(t *testing.T) {
-	engine := newTestEngine()
-	register(engine, Config{Enabled: true})
+	api.Reset()
+	register(Config{Enabled: true})
+	engine := mountTestEngine(t)
 
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/swagger", nil))

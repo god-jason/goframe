@@ -3,8 +3,6 @@ package notify
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/god-jason/goframe/security/crypto"
 )
 
 const webhookDefaultTimeout = 10 * time.Second
@@ -77,9 +77,7 @@ func (s *WebhookSender) Send(ctx context.Context, msg Message) error {
 		request.Header.Set(key, value)
 	}
 	if s.secret != "" {
-		signature := hmac.New(sha256.New, []byte(s.secret))
-		signature.Write(payload)
-		request.Header.Set("X-Signature", hex.EncodeToString(signature.Sum(nil)))
+		request.Header.Set("X-Signature", hex.EncodeToString(crypto.HMACSHA256([]byte(s.secret), payload)))
 	}
 
 	response, err := s.client.Do(request)

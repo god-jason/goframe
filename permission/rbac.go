@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/god-jason/goframe/auth"
 	apperrors "github.com/god-jason/goframe/errors"
 )
 
@@ -88,7 +89,7 @@ func (r *RBAC) Check(ctx context.Context, subject Subject, action string, resour
 	permissions := append([]string(nil), subject.Permissions...)
 	permissions = append(permissions, r.Permissions(subject.Roles)...)
 
-	if !super && !HasPermission(permissions, action) {
+	if !super && !auth.HasPermission(permissions, action) {
 		return apperrors.PermissionDenied()
 	}
 	if err := CheckResource(subject, permissions, action, resource, super); err != nil {

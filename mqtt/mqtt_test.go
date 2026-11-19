@@ -3,8 +3,6 @@ package mqtt
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/god-jason/goframe/logger"
@@ -106,30 +104,6 @@ func TestSubscribeValidation(t *testing.T) {
 	}
 	if err := client.Subscribe(context.Background(), "a/#/b", 0, func(string, []byte) {}); !errors.Is(err, ErrInvalidTopic) {
 		t.Fatalf("invalid filter = %v", err)
-	}
-}
-
-func TestBuildTLSConfig(t *testing.T) {
-	cfg, err := BuildTLSConfig("", "", "", "mqtt.example.com")
-	if err != nil {
-		t.Fatalf("BuildTLSConfig: %v", err)
-	}
-	if cfg == nil || cfg.ServerName != "mqtt.example.com" {
-		t.Fatalf("unexpected tls config: %+v", cfg)
-	}
-
-	if _, err := BuildTLSConfig(filepath.Join(t.TempDir(), "missing.pem"), "", "", ""); err == nil {
-		t.Fatal("expected missing ca error")
-	}
-	invalidCA := filepath.Join(t.TempDir(), "ca.pem")
-	if err := os.WriteFile(invalidCA, []byte("not a cert"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := BuildTLSConfig(invalidCA, "", "", ""); err == nil {
-		t.Fatal("expected invalid ca error")
-	}
-	if _, err := BuildTLSConfig("", "missing.crt", "missing.key", ""); err == nil {
-		t.Fatal("expected missing client certificate error")
 	}
 }
 

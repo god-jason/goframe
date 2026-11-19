@@ -40,11 +40,19 @@ server:
   trusted_proxies: []
   api_prefix: /api
   api_version: v1
-  # 响应 gzip 压缩
-  compression: true
-  compression_min_size: 1024
-  # 单请求超时；0 表示不限制，pprof 等长请求需保持为 0
-  request_timeout: 0
+  # 请求限制：方法白名单、请求体与 Query 上限
+  request:
+    max_body_size: 10MB
+    max_query_length: 4096
+    allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - HEAD
+      - OPTIONS
+    require_json_body: true
 
 trace:
   # OpenTelemetry 链路追踪，默认关闭
@@ -101,43 +109,6 @@ logger:
     local_time: true
 
 security:
-  enabled: true
-
-  headers:
-    enabled: true
-    hsts: false
-    hsts_max_age: 8760h
-    csp: ""
-    csp_report_only: true
-
-  cors:
-    enabled: true
-    # 默认不允许跨域；按实际前端域名配置，禁止生产环境使用 *
-    allowed_origins: []
-    allowed_methods:
-      - GET
-      - POST
-      - PUT
-      - PATCH
-      - DELETE
-      - HEAD
-      - OPTIONS
-    allowed_headers:
-      - Authorization
-      - Content-Type
-      - X-Request-ID
-      - X-CSRF-Token
-      - X-Tenant-ID
-    exposed_headers:
-      - X-Request-ID
-    allow_credentials: false
-    max_age: 12h
-
-  request:
-    max_body_size: 10MB
-    max_query_length: 4096
-    require_json_body: true
-
   auth:
     enabled: true
     issuer: goframe

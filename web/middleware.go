@@ -1,7 +1,6 @@
-package middleware
+package web
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -11,29 +10,8 @@ import (
 	apperrors "github.com/god-jason/goframe/errors"
 )
 
-// SecurityHeaders 设置安全响应头。
-func SecurityHeaders(cfg HeadersConfig) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
-		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		if cfg.HSTS {
-			c.Header("Strict-Transport-Security", fmt.Sprintf("max-age=%d; includeSubDomains", int(cfg.HSTSMaxAge.Seconds())))
-		}
-		if cfg.CSP != "" {
-			header := "Content-Security-Policy"
-			if cfg.CSPReportOnly {
-				header = "Content-Security-Policy-Report-Only"
-			}
-			c.Header(header, cfg.CSP)
-		}
-		c.Next()
-	}
-}
-
-// MethodFilter 拒绝 TRACE、CONNECT 以及未允许的 HTTP 方法。
-func MethodFilter(allowed []string) gin.HandlerFunc {
+// methodFilter 拒绝 TRACE、CONNECT 以及未允许的 HTTP 方法。
+func methodFilter(allowed []string) gin.HandlerFunc {
 	if len(allowed) == 0 {
 		allowed = []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions}
 	}
@@ -59,8 +37,8 @@ func MethodFilter(allowed []string) gin.HandlerFunc {
 	}
 }
 
-// RequestLimits 限制 Query 长度、请求体大小并校验 JSON Content-Type。
-func RequestLimits(cfg RequestConfig) gin.HandlerFunc {
+// requestLimits 限制 Query 长度、请求体大小并校验 JSON Content-Type。
+func requestLimits(cfg RequestConfig) gin.HandlerFunc {
 	maxBody := cfg.MaxBodySize.Bytes()
 	return func(c *gin.Context) {
 		if cfg.MaxQueryLength > 0 && len(c.Request.URL.RawQuery) > cfg.MaxQueryLength {

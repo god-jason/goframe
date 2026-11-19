@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/god-jason/goframe/api"
 )
 
 func withLicenseConfig(t *testing.T, cfg Config) {
@@ -318,24 +320,30 @@ func TestLoadPublicKeyAndRevocation(t *testing.T) {
 
 func TestHTTPRegisterAndRequireValid(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	mount := func() *gin.Engine {
+		engine := gin.New()
+		if err := api.MountRoot(engine); err != nil {
+			t.Fatalf("mount root: %v", err)
+		}
+		return engine
+	}
 
-	// 未启用或路径为空时不注册路由。
+	// 未启用或路径为空时不登记路由。
 	withLicenseConfig(t, Config{Enabled: false, StatusPath: "/license"})
-	engine := gin.New()
-	Register(engine)
+	api.Reset()
+	Register()
+	engine := mount()
 	if code := getStatus(engine, "/license"); code != http.StatusNotFound {
 		t.Fatalf("disabled status = %d", code)
 	}
 
 	withLicenseConfig(t, Config{Enabled: true, StatusPath: "  "})
-	engine = gin.New()
-	Register(engine)
+	api.Reset()
+	Register()
+	engine = mount()
 	if code := getStatus(engine, "/license"); code != http.StatusNotFound {
 		t.Fatalf("empty path status = %d", code)
 	}
-
-	// nil engine 不应 panic。
-	Register(nil)
 
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	manager := newTestManager(t, now, IssueOptions{ID: "L-http", Product: "goframe", IssuedAt: now}, nil)
@@ -345,8 +353,9 @@ func TestHTTPRegisterAndRequireValid(t *testing.T) {
 	})
 
 	withLicenseConfig(t, Config{Enabled: true, StatusPath: "license/"})
-	engine = gin.New()
-	Register(engine)
+	api.Reset()
+	Register()
+	engine = mount()
 	if code := getStatus(engine, "/license"); code != http.StatusOK {
 		t.Fatalf("status = %d", code)
 	}
@@ -372,7 +381,7 @@ func TestHTTPRegisterAndRequireValid(t *testing.T) {
 	}
 }
 
-func TestNormalizePath(t *testing.T) {
+func TestResolvePath(t *testing.T) {
 	cases := map[string]string{
 		"":          DefaultConfig().StatusPath,
 		"   ":       DefaultConfig().StatusPath,
@@ -382,8 +391,8 @@ func TestNormalizePath(t *testing.T) {
 		"/a/b/c/":   "/a/b/c",
 	}
 	for input, want := range cases {
-		if got := normalizePath(input); got != want {
-			t.Fatalf("normalizePath(%q) = %q, want %q", input, got, want)
+		if got := resolvePath(input); got != want {
+			t.Fatalf("resolvePath(%q) = %q, want %q", input, got, want)
 		}
 	}
 }

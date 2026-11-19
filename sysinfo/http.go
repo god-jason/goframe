@@ -3,7 +3,7 @@ package sysinfo
 import (
 	"context"
 	"errors"
-	"strings"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,79 +11,43 @@ import (
 	apperrors "github.com/god-jason/goframe/errors"
 )
 
-// Register 按当前配置注册系统信息接口。未启用时不做任何注册。
-func Register(engine *gin.Engine) {
-	register(engine, GetConfig().normalize())
+// Register 按当前配置把系统信息接口登记为框架根路径接口，由 web 启动时统一挂载。
+// 未启用时不做任何登记。
+func Register() {
+	register(GetConfig().normalize())
 }
 
-// register 使用显式配置注册，便于测试与自定义装配。
-func register(engine *gin.Engine, cfg Config) {
-	if engine == nil || !cfg.Enabled {
+// register 使用显式配置登记，便于测试与自定义装配。
+func register(cfg Config) {
+	if !cfg.Enabled {
 		return
 	}
-	path := normalizePath(cfg.Path)
+	path := resolvePath(cfg.Path)
 
-	engine.GET(path, snapshotHandler(cfg))
-	engine.GET(path+"/", snapshotHandler(cfg))
-
-	group := engine.Group(path)
-	group.GET("/cpu", cpuHandler(cfg))
-	group.GET("/memory", memoryHandler(cfg))
-	group.GET("/disk", diskHandler(cfg))
+	api.RegisterRoot(http.MethodGet, path, collectHandler(cfg, func(ctx context.Context) (any, error) {
+		return snapshot(ctx, cfg)
+	}))
+	api.RegisterRoot(http.MethodGet, path+"/", collectHandler(cfg, func(ctx context.Context) (any, error) {
+		return snapshot(ctx, cfg)
+	}))
+	api.RegisterRoot(http.MethodGet, path+"/cpu", collectHandler(cfg, func(ctx context.Context) (any, error) {
+		return cpuSnapshot(ctx, cfg)
+	}))
+	api.RegisterRoot(http.MethodGet, path+"/memory", collectHandler(cfg, func(ctx context.Context) (any, error) {
+		return memorySnapshot(ctx)
+	}))
+	api.RegisterRoot(http.MethodGet, path+"/disk", collectHandler(cfg, func(ctx context.Context) (any, error) {
+		return diskSnapshot(ctx)
+	}))
 }
 
-// snapshotHandler 返回完整快照。
-func snapshotHandler(cfg Config) gin.HandlerFunc {
+// collectHandler 把采集函数统一包装为带超时与标准响应的处理器。
+func collectHandler(cfg Config, collect func(context.Context) (any, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), cfg.Timeout)
 		defer cancel()
 
-		value, err := snapshot(ctx, cfg)
-		if err != nil {
-			writeError(c, err)
-			return
-		}
-		api.Success(c, value)
-	}
-}
-
-// cpuHandler 返回 CPU 实时使用率。
-func cpuHandler(cfg Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), cfg.Timeout)
-		defer cancel()
-
-		value, err := cpuSnapshot(ctx, cfg)
-		if err != nil {
-			writeError(c, err)
-			return
-		}
-		api.Success(c, value)
-	}
-}
-
-// memoryHandler 返回内存与交换分区使用情况。
-func memoryHandler(cfg Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), cfg.Timeout)
-		defer cancel()
-
-		value, err := memorySnapshot(ctx)
-		if err != nil {
-			writeError(c, err)
-			return
-		}
-		api.Success(c, value)
-	}
-}
-
-// diskHandler 返回分区使用情况。
-func diskHandler(cfg Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), cfg.Timeout)
-		defer cancel()
-
-		value, err := diskSnapshot(ctx)
+		value, err := collect(ctx)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -101,18 +65,11 @@ func writeError(c *gin.Context, err error) {
 	api.Fail(c, apperrors.Unavailable("system metrics unavailable").WithCause(err))
 }
 
-// normalizePath 补全前导斜杠并去掉尾部斜杠。
-func normalizePath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		path = DefaultConfig().Path
+// resolvePath 规范化路径，空值或根路径回退到默认路径。
+func resolvePath(path string) string {
+	resolved := api.NormalizePath(path)
+	if resolved == "/" {
+		resolved = api.NormalizePath(DefaultConfig().Path)
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	path = strings.TrimRight(path, "/")
-	if path == "" {
-		path = DefaultConfig().Path
-	}
-	return path
+	return resolved
 }

@@ -1,4 +1,5 @@
-package middleware
+// Package accesslog 提供 Gin 访问日志中间件，在请求完成后记录状态码、耗时与身份信息。
+package accesslog
 
 import (
 	"time"
@@ -11,8 +12,9 @@ import (
 	"github.com/god-jason/goframe/trace"
 )
 
-// AccessLog 在请求完成后记录访问日志（状态码、耗时、请求 ID）。
-func AccessLog(log logger.Logger, skipPaths ...string) gin.HandlerFunc {
+// Middleware 在请求完成后记录访问日志（状态码、耗时、请求 ID）。
+// skipPaths 支持按实际请求路径或注册路由（如 /items/:id）跳过记录。
+func Middleware(log logger.Logger, skipPaths ...string) gin.HandlerFunc {
 	skip := make(map[string]struct{}, len(skipPaths))
 	for _, path := range skipPaths {
 		skip[path] = struct{}{}

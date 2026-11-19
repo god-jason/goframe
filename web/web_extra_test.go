@@ -99,7 +99,6 @@ func TestStartupPProfRateLimitCacheAndWebSocket(t *testing.T) {
 	applyConfig(t, `
 server:
   port: 8080
-  request_timeout: 1s
   trusted_proxies:
     - 127.0.0.1
 pprof:
@@ -143,50 +142,23 @@ websocket:
 	}
 }
 
-func TestStartupCompressionDisabledAndSecurityDisabled(t *testing.T) {
-	applyConfig(t, "server:\n  port: 8080\n  compression: false\nsecurity:\n  enabled: false\n")
-	if err := Startup(context.Background()); err != nil {
-		t.Fatalf("Startup: %v", err)
-	}
-	if err := Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown: %v", err)
-	}
-}
-
-func TestStartupSecurityHeadersDisabled(t *testing.T) {
+func TestStartupWithRequestLimitsConfigured(t *testing.T) {
 	applyConfig(t, `
 server:
   port: 8080
-security:
-  enabled: true
-  headers:
-    enabled: false
-  cors:
-    enabled: true
-    allowed_origins:
-      - https://example.com
+  request:
+    max_body_size: 1MB
+    max_query_length: 2048
+    allowed_methods:
+      - GET
+      - POST
+    require_json_body: false
 `)
 	if err := Startup(context.Background()); err != nil {
 		t.Fatalf("Startup: %v", err)
 	}
 	if err := Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown: %v", err)
-	}
-}
-
-func TestStartupCORSError(t *testing.T) {
-	applyConfig(t, `
-server:
-  port: 8080
-security:
-  cors:
-    enabled: true
-    allowed_origins:
-      - "*"
-    allow_credentials: true
-`)
-	if err := Startup(context.Background()); err == nil {
-		t.Fatal("expected cors configuration error")
 	}
 }
 

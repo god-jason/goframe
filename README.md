@@ -79,14 +79,15 @@ goframe/
 ├── boot/           # 组件启动注册表（依赖拓扑启动、逆序释放）
 ├── bootstrap/      # 汇总导入全部标准组件
 ├── config/         # 配置段注册、加载、环境变量覆盖、热更新
-├── web/            # HTTP Server、TLS、Gin 引擎装配、中间件、健康检查、指标、pprof
+├── web/            # HTTP Server、TLS、Gin 引擎装配、全局中间件链、请求限制、健康检查、指标、pprof
 ├── api/            # 接口注册与挂载、统一响应、分页、路由分组、SPA 托管、认证/租户/权限守卫（原 response、router 包已并入）
-├── middleware/     # RequestID、Recovery、日志、CORS、安全、限流、CSRF
+├── accesslog/      # 访问日志中间件（状态码、耗时、RequestID、身份、trace）
+├── idempotency/    # 基于 Idempotency-Key 的 HTTP 幂等中间件与记录存储
 ├── errors/         # 稳定错误码与 AppError
 ├── auth/           # Identity、JWT、API Key、TOTP、Session/RefreshToken、GORM 仓库、OIDC
 ├── license/        # 离线签名许可、功能授权、配额、机器绑定与吊销
 ├── permission/     # RBAC、策略、租户与资源授权
-├── security/       # crypto / csrf / ratelimit / sanitize / audit / secrets / captcha
+├── security/       # crypto / csrf（含 Gin 中间件） / ratelimit（含 Gin 中间件） / sanitize / audit / secrets / captcha
 ├── database/       # GORM 封装、事务、健康检查、migrate 迁移工具
 ├── cache/          # Cache 接口、Memory、Redis
 ├── storage/        # Storage 接口、本地存储
@@ -155,7 +156,7 @@ iot-platform/
 | 层 | 职责 | 当前实现 |
 |---|---|---|
 | Application | 组件启动注册、依赖拓扑、全局实例、配置段注册 | `boot/`、`config/`、`bootstrap/` |
-| Interface | HTTP 引擎装配、路由、中间件、Handler、DTO | `web/`、`api/`、`middleware/` |
+| Interface | HTTP 引擎装配、路由、中间件、Handler、DTO | `web/`、`api/` |
 | Business | Service、Domain、Repository 接口、业务事件、业务校验 | 业务项目 `internal/modules/*` |
 | Infrastructure | GORM Repository、数据库、缓存、存储、日志、调度、事件、加密 | `database/`、`cache/`、`storage/`、`logger/`、`scheduler/`、`event/`、`security/` |
 | Runtime | 配置、TLS、健康检查、指标、优雅退出 | `config/`、`web/`、`health/`、`monitor/` |
@@ -458,15 +459,15 @@ column, direction := query.SortClause(map[string]string{
 - 执行中：返回处理中状态。
 - 失败：按业务策略允许安全重试。
 
-设备命令应使用独立的 `command_id`，不能仅依赖 HTTP 幂等键。当前框架未内置幂等中间件，业务可按该约定实现。
+设备命令应使用独立的 `command_id`，不能仅依赖 HTTP 幂等键。HTTP 幂等由 `idempotency` 包提供（`idempotency.Middleware(store, ttl)`），业务可按该约定实现设备侧幂等。
 
 ### 中间件顺序
 
 全局链路：
 
 ```text
-RequestID → Recovery → Security Headers → Method Filter → CORS
-→ Global Rate Limit → Request Limits → CSRF → Access Log → Metrics → 业务路由
+gin.Recovery → Trace → CSRF → Global Rate Limit → Method Filter → Request Limits
+→ Access Log → Metrics → 业务路由
 ```
 
 认证、租户、权限中间件由业务模块按分组挂载：
@@ -479,10 +480,10 @@ protected := api.Group("",
 )
 ```
 
-- Access Log 在请求完成后记录状态码、耗时和 RequestID。
+- Access Log 在请求完成后记录状态码、耗时和 RequestID（客户端携带 `X-Request-ID` 时记录该值）。
 - 登录接口应在认证之前单独限流，示例模块已按 IP 配置登录限流。
 - CSRF 仅对携带 CSRF Cookie 且未使用 Bearer Token 的非安全方法生效。
-- 客户端提供的 `X-Request-ID` 会校验格式和长度，不能作为身份凭证。
+- 与 gin/gin-contrib 重复的中间件（RequestID、Recovery、Gzip、Timeout、Security Headers、CORS）已从框架移除，框架不引入 gin-contrib 依赖；业务可按需自行接入对应 gin-contrib 中间件。
 
 ## 认证与授权
 
@@ -842,7 +843,7 @@ func GetConfig() *Config { return cfg.Get() }
 
 ```yaml
 app:        # 名称、版本、环境
-server:     # 监听地址、超时、可信代理、API 前缀与版本
+server:     # 监听地址、超时、可信代理、API 前缀与版本、请求限制（request 子段）
 tls:        # none / file / acme
 database:   # driver、DSN、连接池
 redis:      # 缓存开关与连接
@@ -855,10 +856,9 @@ broker:     # 嵌入式 MQTT Broker、会话、限额、TLS、重传间隔
 websocket:  # 路径、Origin、消息大小、超时、上下行队列、匿名开关
 spa:        # embed / directory
 
-security:             # 安全开关、Header、CORS、请求限制（middleware 包）
 security.auth:        # JWT、Session 与 password（auth 包）
-security.rate_limit:  # 限流（ratelimit 包）
-security.csrf:        # CSRF（csrf 包）
+security.rate_limit:  # 限流（ratelimit 包，含 Gin 中间件）
+security.csrf:        # CSRF（csrf 包，含 Gin 中间件）
 security.upload:      # 上传（upload 包）
 security.audit:       # 审计（audit 包）
 security.encryption:  # 数据加密（crypto 包）
@@ -1544,7 +1544,7 @@ auth.SetAPIKeyRepository(keys)
 **HTTP 客户端与中间件**
 
 - `httpclient.New(httpclient.Options{...})` 内置超时、重试、熔断与 JSON 辅助。
-- `middleware.Gzip()`、`middleware.Timeout()`、`middleware.Idempotency()`；Web 已默认启用 gzip，`server.request_timeout` 可开启全局请求超时。
+- `idempotency.Middleware(store, ttl)` 提供 HTTP 幂等；gzip、超时、RequestID、安全 Header、CORS 等与 gin-contrib 重复的中间件已从框架移除，业务可自行接入 gin-contrib 对应实现。
 
 **DNS-01 与密钥管理**
 

@@ -1,4 +1,4 @@
-package middleware
+package idempotency
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 func TestIdempotencyReplaysCachedResponse(t *testing.T) {
 	var calls int32
-	engine := newTestEngine(Idempotency(NewMemoryStore(), time.Minute))
+	engine := newTestEngine(Middleware(NewMemoryStore(), time.Minute))
 	engine.POST("/orders", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		c.Header("X-Order", "42")
@@ -40,7 +40,7 @@ func TestIdempotencyReplaysCachedResponse(t *testing.T) {
 }
 
 func TestIdempotencyConcurrentRequestReturnsConflict(t *testing.T) {
-	engine := newTestEngine(Idempotency(NewMemoryStore(), time.Minute))
+	engine := newTestEngine(Middleware(NewMemoryStore(), time.Minute))
 	started := make(chan struct{})
 	release := make(chan struct{})
 	engine.POST("/slow", func(c *gin.Context) {
@@ -74,7 +74,7 @@ func TestIdempotencyConcurrentRequestReturnsConflict(t *testing.T) {
 
 func TestIdempotencyRejectsTooLongKey(t *testing.T) {
 	var calls int32
-	engine := newTestEngine(Idempotency(NewMemoryStore(), time.Minute))
+	engine := newTestEngine(Middleware(NewMemoryStore(), time.Minute))
 	engine.POST("/orders", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		c.Status(http.StatusOK)
@@ -93,7 +93,7 @@ func TestIdempotencyRejectsTooLongKey(t *testing.T) {
 
 func TestIdempotencyIgnoresGet(t *testing.T) {
 	var calls int32
-	engine := newTestEngine(Idempotency(NewMemoryStore(), time.Minute))
+	engine := newTestEngine(Middleware(NewMemoryStore(), time.Minute))
 	engine.GET("/orders", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		c.Status(http.StatusOK)
@@ -109,7 +109,7 @@ func TestIdempotencyIgnoresGet(t *testing.T) {
 
 func TestIdempotencyDoesNotCacheServerError(t *testing.T) {
 	var calls int32
-	engine := newTestEngine(Idempotency(NewMemoryStore(), time.Minute))
+	engine := newTestEngine(Middleware(NewMemoryStore(), time.Minute))
 	engine.POST("/fail", func(c *gin.Context) {
 		atomic.AddInt32(&calls, 1)
 		c.Status(http.StatusInternalServerError)
