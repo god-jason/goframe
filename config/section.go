@@ -53,7 +53,7 @@ func (s *Section[T]) Defaults() T { return s.defaults }
 
 func (s *Section[T]) envKeys() []string { return s.keys }
 
-// load 从 viper 读取该配置段。缺失的字段保留默认值。
+// load 从解析后的配置映射读取该配置段。缺失的字段保留默认值。
 func (s *Section[T]) load(raw map[string]any) error {
 	value := s.defaults
 	if data, ok := lookupMap(raw, s.name); ok {

@@ -238,7 +238,7 @@ func (s *fakeSMTPServer) handle(conn net.Conn) {
 	}
 }
 
-func newTestSMTPSender(t *testing.T, server *fakeSMTPServer, cfg Config) *SMTPSender {
+func newTestSMTPSender(t *testing.T, server *fakeSMTPServer, cfg SMTPConfig) *SMTPSender {
 	t.Helper()
 	host, port := server.addr()
 	cfg.Host = host
@@ -255,7 +255,7 @@ func newTestSMTPSender(t *testing.T, server *fakeSMTPServer, cfg Config) *SMTPSe
 
 func TestSMTPSendSuccess(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{})
-	sender := newTestSMTPSender(t, server, Config{Username: "user", Password: "pass"})
+	sender := newTestSMTPSender(t, server, SMTPConfig{Username: "user", Password: "pass"})
 
 	message := Message{
 		To:      []string{"Alice <alice@example.com>", "bob@example.com"},
@@ -288,7 +288,7 @@ func TestSMTPSendSuccess(t *testing.T) {
 
 func TestSMTPSendAuthFailure(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{authCode: 535})
-	sender := newTestSMTPSender(t, server, Config{Username: "user", Password: "pass"})
+	sender := newTestSMTPSender(t, server, SMTPConfig{Username: "user", Password: "pass"})
 
 	err := sender.Send(context.Background(), Message{To: []string{"a@example.com"}, Body: "x"})
 	if err == nil || !strings.Contains(err.Error(), "auth") {
@@ -304,7 +304,7 @@ func TestSMTPSendConnectFailure(t *testing.T) {
 	port := listener.Addr().(*net.TCPAddr).Port
 	_ = listener.Close()
 
-	sender, err := NewSMTP(Config{Host: "127.0.0.1", Port: port, From: "noreply@example.com"})
+	sender, err := NewSMTP(SMTPConfig{Host: "127.0.0.1", Port: port, From: "noreply@example.com"})
 	if err != nil {
 		t.Fatalf("NewSMTP: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestSMTPSendConnectFailure(t *testing.T) {
 
 func TestSMTPSendRequiresSTARTTLS(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{})
-	sender := newTestSMTPSender(t, server, Config{TLS: true})
+	sender := newTestSMTPSender(t, server, SMTPConfig{TLS: true})
 
 	err := sender.Send(context.Background(), Message{To: []string{"a@example.com"}})
 	if err == nil || !strings.Contains(err.Error(), "does not support STARTTLS") {
@@ -326,7 +326,7 @@ func TestSMTPSendRequiresSTARTTLS(t *testing.T) {
 
 func TestSMTPSendSTARTTLSFailure(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{advertiseStartTLS: true, closeOnStartTLS: true})
-	sender := newTestSMTPSender(t, server, Config{})
+	sender := newTestSMTPSender(t, server, SMTPConfig{})
 
 	err := sender.Send(context.Background(), Message{To: []string{"a@example.com"}})
 	if err == nil || !strings.Contains(err.Error(), "starttls") {
@@ -336,7 +336,7 @@ func TestSMTPSendSTARTTLSFailure(t *testing.T) {
 
 func TestSMTPSendGreetingRejected(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{greeting: "554 go away"})
-	sender := newTestSMTPSender(t, server, Config{})
+	sender := newTestSMTPSender(t, server, SMTPConfig{})
 
 	err := sender.Send(context.Background(), Message{To: []string{"a@example.com"}})
 	if err == nil || !strings.Contains(err.Error(), "create client") {
@@ -346,7 +346,7 @@ func TestSMTPSendGreetingRejected(t *testing.T) {
 
 func TestSMTPSendCanceledDuringGreeting(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{greetingDelay: 2 * time.Second})
-	sender := newTestSMTPSender(t, server, Config{})
+	sender := newTestSMTPSender(t, server, SMTPConfig{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -376,7 +376,7 @@ func TestSMTPSendStageFailures(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			server := newFakeSMTPServer(t, tc.settings)
-			sender := newTestSMTPSender(t, server, Config{})
+			sender := newTestSMTPSender(t, server, SMTPConfig{})
 			err := sender.Send(context.Background(), Message{To: []string{"a@example.com"}, Body: "x"})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want substring %q", err, tc.want)
@@ -387,7 +387,7 @@ func TestSMTPSendStageFailures(t *testing.T) {
 
 func TestSMTPSendInvalidInput(t *testing.T) {
 	server := newFakeSMTPServer(t, fakeSMTPSettings{})
-	sender := newTestSMTPSender(t, server, Config{})
+	sender := newTestSMTPSender(t, server, SMTPConfig{})
 
 	if err := sender.Send(context.Background(), Message{To: []string{"not an address"}}); err == nil || !strings.Contains(err.Error(), "invalid recipient") {
 		t.Fatalf("err = %v, want invalid recipient error", err)

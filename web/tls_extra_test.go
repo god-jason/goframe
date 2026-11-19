@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/god-jason/goframe/logger"
+	"github.com/god-jason/goframe/tlscfg"
 )
 
 // selfSignedPEM 生成 127.0.0.1/localhost 的自签证书与私钥 PEM。
@@ -74,7 +75,7 @@ func TestBuildTLSConfigFileMode(t *testing.T) {
 	if material.config == nil || len(material.config.Certificates) != 1 {
 		t.Fatalf("unexpected material: %+v", material)
 	}
-	if material.config.MinVersion != minTLSVersion {
+	if material.config.MinVersion != tlscfg.MinVersion {
 		t.Fatalf("min version = %d", material.config.MinVersion)
 	}
 	if material.challenge != nil {

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -11,7 +10,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
 	"github.com/god-jason/goframe/boot"
 )
@@ -130,27 +129,28 @@ func Reload() error {
 
 // loadSections 读取文件并解码到每个配置段。
 func loadSections(path string, explicit bool) error {
-	v := viper.New()
+	raw := map[string]any{}
 	if path != "" {
-		raw, err := os.ReadFile(path)
+		content, err := os.ReadFile(path)
 		if err != nil {
 			if explicit {
 				return fmt.Errorf("config: read %s: %w", path, err)
 			}
 		} else {
-			expanded := expandEnv(string(raw))
-			v.SetConfigType(strings.TrimPrefix(filepath.Ext(path), "."))
-			if err := v.ReadConfig(bytes.NewBufferString(expanded)); err != nil {
+			expanded := expandEnv(string(content))
+			if err := yaml.Unmarshal([]byte(expanded), &raw); err != nil {
 				return fmt.Errorf("config: parse %s: %w", path, err)
 			}
+			if raw == nil {
+				raw = map[string]any{}
+			}
+			raw = lowerKeys(raw).(map[string]any)
 		}
 	}
 
 	registry.mu.RLock()
 	sections := append([]section(nil), registry.sections...)
 	registry.mu.RUnlock()
-
-	raw := v.AllSettings()
 	// 环境变量按 GOFRAME_<SECTION>_<KEY> 覆盖文件值，包括文件中不存在的键。
 	for _, item := range sections {
 		for _, key := range item.envKeys() {
@@ -203,7 +203,8 @@ func notifyReload() {
 	}
 }
 
-// resolveSectionFile 查找配置文件。显式指定的文件必须存在。
+// resolveSectionFile 查找配置文件。显式指定的文件（绝对或相对路径）必须存在；
+// 未显式指定时依次在当前工作目录、可执行文件所在目录下查找默认配置文件。
 func resolveSectionFile() (string, bool) {
 	registry.mu.RLock()
 	file := registry.file
@@ -215,22 +216,45 @@ func resolveSectionFile() (string, bool) {
 		return file, true
 	}
 
-	candidates := []string{
+	bases := []string{"."}
+	if exe, err := os.Executable(); err == nil {
+		if dir := filepath.Dir(exe); dir != "." {
+			bases = append(bases, dir)
+		}
+	}
+	names := []string{
 		filepath.Join("configs", "config.yaml"),
 		filepath.Join("configs", "config.yml"),
-		filepath.Join("configs", "config.json"),
-		filepath.Join("configs", "config.toml"),
 		"config.yaml",
 		"config.yml",
-		"config.json",
-		"config.toml",
 	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate, false
+	for _, base := range bases {
+		for _, name := range names {
+			candidate := filepath.Join(base, name)
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				return candidate, false
+			}
 		}
 	}
 	return "", false
+}
+
+// lowerKeys 递归把配置映射的键统一为小写，保持与原 viper 行为一致，
+// 使环境变量与配置段的点分路径查找不受大小写影响。
+func lowerKeys(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			out[strings.ToLower(key)] = lowerKeys(item)
+		}
+		return out
+	case []any:
+		for i, item := range v {
+			v[i] = lowerKeys(item)
+		}
+	}
+	return value
 }
 
 // watchSections 监听配置文件变化并重载，ctx 取消后退出。

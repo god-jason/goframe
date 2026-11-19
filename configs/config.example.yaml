@@ -91,6 +91,53 @@ redis:
   pool_size: 20
   key_prefix: "goframe:"
 
+taskqueue:
+  # 基于 Asynq（Redis）的分布式任务队列
+  enabled: false
+  # 为空时整体复用上方 redis 段的连接配置
+  addr: ""
+  username: ""
+  password: ""
+  db: 0
+  # worker 并发量
+  concurrency: 10
+  # 队列名 -> 权重，决定各队列的消费比例；未列出的队列不会被消费
+  queues:
+    default: 10
+    notify: 5
+  # true 时严格按队列优先级消费，而非按权重轮转
+  strict_priority: false
+  # 优雅停机等待任务完成的最长时间
+  shutdown_timeout: 8s
+  # 入队任务的默认重试次数与单任务执行超时
+  max_retry: 3
+  task_timeout: 1m
+  # Asynq 内部日志级别：debug / info / warn / error / fatal
+  log_level: info
+
+notify:
+  # 统一通知；taskqueue 启用时 notify.Send 入队异步发送并自动重试，
+  # 队列未启用时回退为同步直发
+  enabled: false
+  # 发送通道：smtp / webhook
+  channel: smtp
+  # 投递的队列名，必须存在于 taskqueue.queues
+  queue: notify
+  max_retry: 3
+  smtp:
+    host: ${SMTP_HOST}
+    port: 587
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    from: noreply@example.com
+    tls: false
+  webhook:
+    url: ${WEBHOOK_URL}
+    # 配置后附加 X-Signature HMAC-SHA256 签名头
+    secret: ${WEBHOOK_SECRET}
+    headers: {}
+    timeout: 10s
+
 logger:
   level: info
   format: json
@@ -226,6 +273,39 @@ sysinfo:
   # CPU 使用率采样窗口
   sample_interval: 300ms
   timeout: 3s
+
+payment:
+  # 在线支付网关（微信支付 APIv3 + 支付宝）；金额统一使用分，订单落库由业务负责
+  enabled: false
+  # 回调路由前缀，登记为 POST {notify_path}/wechat 与 {notify_path}/alipay
+  notify_path: /payment/notify
+  timeout: 10s
+  idempotency:
+    # 已处理回调标记保留时长 / 处理中互斥锁时长（复用 redis 缓存做分布式去重）
+    done_ttl: 48h
+    processing_ttl: 30s
+  wechat:
+    enabled: false
+    app_id: ${WECHAT_APP_ID}
+    mch_id: ${WECHAT_MCH_ID}
+    serial_no: ${WECHAT_SERIAL_NO}
+    # 商户 API 私钥：PEM 内容或文件路径
+    private_key: ${WECHAT_PRIVATE_KEY}
+    apiv3_key: ${WECHAT_APIV3_KEY}
+    notify_url: https://example.com/payment/notify/wechat
+  alipay:
+    enabled: false
+    app_id: ${ALIPAY_APP_ID}
+    # 应用私钥：PEM 内容或文件路径
+    private_key: ${ALIPAY_PRIVATE_KEY}
+    # 普通模式填支付宝公钥；三个证书文件任一非空即启用证书模式
+    public_key: ${ALIPAY_PUBLIC_KEY}
+    app_cert_file: ""
+    alipay_cert_file: ""
+    root_cert_file: ""
+    production: false
+    notify_url: https://example.com/payment/notify/alipay
+    return_url: https://example.com/pay/done
 
 outbox:
   # 事务 Outbox：业务在事务内写入事件，后台 relay 投递到进程内 EventBus

@@ -103,6 +103,7 @@ goframe/
 ├── broker/         # 嵌入式 MQTT Broker（会话/QoS/Retained/Will/鉴权）
 ├── websocket/      # WebSocket Hub（鉴权/Origin/心跳/广播）
 ├── weixin/         # 微信公众号 / 小程序鉴权、登录与消息校验
+├── payment/        # 在线支付网关（微信支付 APIv3 / 支付宝：下单、查询、退款、账单、回调）
 ├── health/         # 存活/就绪/聚合健康检查
 ├── monitor/        # Prometheus 指标
 ├── sysinfo/        # CPU/内存/磁盘实时占用分析
@@ -110,7 +111,8 @@ goframe/
 ├── openapi/        # swaggo OpenAPI 文档
 ├── httpclient/     # HTTP 客户端（重试、熔断、JSON）
 ├── lock/           # 分布式锁（Redis / 内存）
-├── notify/         # 通知（SMTP / Webhook / SMS 接口）
+├── taskqueue/      # 分布式任务队列（Asynq/Redis：并发、队列权重、重试、延迟）
+├── notify/         # 通知（SMTP / Webhook / SMS，可经任务队列异步派发）
 ├── i18n/           # 国际化与语言协商
 ├── logger/         # 日志接口与 Zap 实现
 ├── id/             # UUIDv7
@@ -228,6 +230,8 @@ iot-platform/
 | 文件存储 / 上传 | `storage.Get()` / `upload.Get()` |
 | 协程池 / 事件总线 | `pool.Get()` / `event.Get()` |
 | 定时任务 | `scheduler.Get()` |
+| 任务队列 | `taskqueue.Enqueue()` / `taskqueue.Register()` |
+| 通知 | `notify.Send()` / `notify.GetSender()` |
 | MQTT 客户端 / Broker | `mqtt.Get()` / `broker.Get()` |
 | WebSocket | `websocket.Get()` |
 | 认证 / 授权 | `auth.Get()` / `permission.Get()` |
@@ -262,7 +266,7 @@ func init() {
 main 设置配置路径/注入项
 → boot.Startup(ctx)
    config → logger → database → cache → storage → upload
-   → event → pool → scheduler → broker → mqtt → websocket
+   → event → pool → scheduler → taskqueue → notify → broker → mqtt → websocket
    → auth → ratelimit → csrf → audit → crypto → web（仅装配引擎）
 → 业务手动初始化模块并注册路由到 web.API()
 → web.Run(ctx) 最后启动 HTTP 服务
@@ -850,6 +854,8 @@ redis:      # 缓存开关与连接
 logger:     # level / format / output / rotation（默认滚动写入文件）
 storage:    # local / s3 / minio
 scheduler:  # 开关、任务超时、时区
+taskqueue:  # Asynq 任务队列：Redis 连接（缺省复用 redis 段）、并发、队列权重、重试
+notify:     # 通知通道 smtp/webhook，队列启用时经 taskqueue 异步派发
 pool:       # 后台协程池 worker 与队列
 mqtt:       # 客户端 Broker 列表、认证、TLS、重连
 broker:     # 嵌入式 MQTT Broker、会话、限额、TLS、重传间隔
@@ -1356,6 +1362,51 @@ GET /system/disk      # 各分区容量、使用率与 inode
 - 单次 CPU 采集会阻塞 `sample_interval`，超时由 `sysinfo.timeout` 控制。
 - 接口会暴露主机信息，生产环境建议通过网关、内网或认证中间件限制访问来源。
 
+### 在线支付（payment）
+
+基于官方 SDK（`wechatpay-go` / `smartwalle/alipay`）的支付网关封装，默认关闭。只做协议网关、不落库：订单与退款状态持久化由业务在回调 handler 中完成；金额统一使用分（`int64`），微信/支付宝的元分换算在适配器内处理。
+
+```yaml
+payment:
+  enabled: true
+  notify_path: /payment/notify   # 自动登记 POST /payment/notify/wechat、/payment/notify/alipay
+  wechat:
+    enabled: true
+    app_id: wx...
+    mch_id: "190000..."
+    serial_no: ...               # 商户 API 证书序列号
+    private_key: /etc/apiclient_key.pem  # PEM 内容或文件路径
+    apiv3_key: ...
+    notify_url: https://example.com/payment/notify/wechat
+  alipay:
+    enabled: true
+    app_id: "2021..."
+    private_key: ...             # 应用私钥
+    public_key: ...              # 普通模式；三个 *_cert_file 任一非空即证书模式
+    production: true
+    notify_url: https://example.com/payment/notify/alipay
+```
+
+```go
+// 下单（渠道未启用时返回 nil）
+result, err := payment.Get().Wechat().Prepay(ctx, payment.Order{
+	OutTradeNo: "ORD20261119001", Amount: 1, Subject: "1 分钱测试", Scene: payment.SceneNative,
+})
+// result.CodeURL 即 Native 二维码串；jsapi 场景返回 PayParams 调起五参数。
+
+// 回调：验签、幂等去重（Redis 可用时为分布式）后分发业务 handler
+payment.OnNotify(payment.ChannelWechat, func(ctx context.Context, n *payment.NotifyResult) error {
+	if n.State == payment.StateSuccess {
+		// 业务落库：标记订单已支付（按 n.OutTradeNo 幂等更新）
+	}
+	return nil
+})
+```
+
+- 支持场景：微信 `native`/`jsapi`/`h5`/`app`，支付宝 `native`/`page`/`h5`/`app`；均含查询、关单、退款、退款查询与账单下载（`Query`/`Close`/`Refund`/`QueryRefund`/`DownloadBill`）。
+- 回调处理失败或同一回调正在处理时按渠道约定应答失败，由渠道自动重试；成功处理结果按 `IdempotencyKey` 去重，`done_ttl` 内重复通知直接确认。
+- 未启用 Redis 时幂等锁回退为进程内实现，仅保证单实例语义。
+
 ### 企业许可（license）
 
 基于 Ed25519 的离线签名许可，运行时只需公钥即可校验，无需联网激活：
@@ -1533,9 +1584,27 @@ auth.SetAPIKeyRepository(keys)
 
 支持 `subscribe / unsubscribe / publish / ping`，单连接订阅上限由 `websocket.max_topics` 控制。
 
-**通知、i18n、验证码、TOTP、OIDC**
+**任务队列与通知**
 
-- `notify.NewSMTP`、`notify.NewWebhook`、`notify.NewSMS`。
+`taskqueue` 基于 Asynq（Redis）提供分布式异步任务队列，并发量、队列权重、重试等由 `taskqueue` 配置段控制；处理器在 boot 启动前注册：
+
+```go
+// 业务 init 中注册处理器
+taskqueue.Register("report:build", func(ctx context.Context, payload []byte) error {
+    return buildReport(ctx, payload)
+})
+
+// 投递任务（可选 Queue / MaxRetry / Timeout / Delay / Unique）
+err := taskqueue.Enqueue(ctx, "report:build", data,
+    taskqueue.Queue("default"), taskqueue.Delay(time.Minute))
+```
+
+`notify` 在配置段声明通道（smtp / webhook）后即可用 `notify.Send` 派发：任务队列启用时入队异步发送并自动重试，未启用时回退为同步直发；也可 `notify.SetSender` 注入自定义发送器。
+
+- `notify.NewSMTP`、`notify.NewWebhook`、`notify.NewSMS` 仍可独立使用。
+
+**i18n、验证码、TOTP、OIDC**
+
 - `i18n.New("zh-CN")` + `bundle.Middleware()`。
 - `captcha.New(cfg, store)` 生成图片验证码。
 - `auth.GenerateTOTPSecret/VerifyTOTP` 提供 TOTP。
@@ -1680,7 +1749,7 @@ govulncheck ./...
 | V1.1 认证与安全 | JWT、Refresh Token、Session、Argon2id、RBAC、资源授权、限流、CSRF、安全 Header、审计、AES 加密、API Key、TOTP、OIDC、验证码 | 已实现 |
 | V1.2 基础设施 | Redis、Cache、Storage、Scheduler、EventBus、TLS/ACME、SPA Embed、Prometheus、协程池、安全上传、图片处理、Excel 导入导出、PDF 生成、数据库迁移、S3/MinIO、OpenTelemetry、OpenAPI、分布式锁、Outbox | 已实现 |
 | V1.3 IoT 扩展 | MQTT Broker、MQTT 客户端、WebSocket Hub、设备鉴权、HMAC、MQTT ACL、设备命令、命令幂等、设备审计 | MQTT Broker/客户端/WebSocket 已实现；设备鉴权与命令幂等规划 |
-| V1.4 平台能力 | API Key、通知、i18n、ClamAV、HTTP 客户端、gzip/timeout/幂等中间件、WebSocket topic 协议、DNS-01、Vault 与密钥轮换、sysinfo 实时资源分析、企业离线许可、微信鉴权 | 已实现 |
+| V1.4 平台能力 | API Key、通知、i18n、ClamAV、HTTP 客户端、gzip/timeout/幂等中间件、WebSocket topic 协议、DNS-01、Vault 与密钥轮换、sysinfo 实时资源分析、企业离线许可、微信鉴权、在线支付（微信/支付宝） | 已实现 |
 
 后续扩展点：
 

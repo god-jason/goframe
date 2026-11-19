@@ -9,14 +9,14 @@ import (
 func TestNewSMTPValidation(t *testing.T) {
 	cases := []struct {
 		name string
-		cfg  Config
+		cfg  SMTPConfig
 		want string
 	}{
-		{"missing host", Config{From: "noreply@example.com"}, "host"},
-		{"missing from", Config{Host: "smtp.example.com"}, "from"},
-		{"invalid port", Config{Host: "smtp.example.com", Port: 70000, From: "noreply@example.com"}, "port"},
-		{"invalid from", Config{Host: "smtp.example.com", From: "not-an-address"}, "from"},
-		{"incomplete credentials", Config{Host: "smtp.example.com", From: "noreply@example.com", Username: "user"}, "username"},
+		{"missing host", SMTPConfig{From: "noreply@example.com"}, "host"},
+		{"missing from", SMTPConfig{Host: "smtp.example.com"}, "from"},
+		{"invalid port", SMTPConfig{Host: "smtp.example.com", Port: 70000, From: "noreply@example.com"}, "port"},
+		{"invalid from", SMTPConfig{Host: "smtp.example.com", From: "not-an-address"}, "from"},
+		{"incomplete credentials", SMTPConfig{Host: "smtp.example.com", From: "noreply@example.com", Username: "user"}, "username"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -32,7 +32,7 @@ func TestNewSMTPValidation(t *testing.T) {
 }
 
 func TestNewSMTPDefaults(t *testing.T) {
-	sender, err := NewSMTP(Config{Host: "smtp.example.com", From: "Noreply <noreply@example.com>"})
+	sender, err := NewSMTP(SMTPConfig{Host: "smtp.example.com", From: "Noreply <noreply@example.com>"})
 	if err != nil {
 		t.Fatalf("NewSMTP: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestNewSMTPDefaults(t *testing.T) {
 }
 
 func TestSMTPSendRequiresRecipients(t *testing.T) {
-	sender, err := NewSMTP(Config{Host: "smtp.example.com", From: "noreply@example.com"})
+	sender, err := NewSMTP(SMTPConfig{Host: "smtp.example.com", From: "noreply@example.com"})
 	if err != nil {
 		t.Fatalf("NewSMTP: %v", err)
 	}

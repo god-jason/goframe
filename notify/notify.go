@@ -1,7 +1,9 @@
 // Package notify 提供邮件、Webhook、短信等统一消息通知能力。
 //
-// 各发送器相互独立，可按需组合使用；具体发送器由业务侧创建后注入，
-// 包本身不绑定任何第三方厂商或全局配置。
+// 各发送器相互独立，可按需组合使用，也可由业务侧直接创建。
+// 全局用法：notify 配置段声明通道（smtp / webhook），
+// notify.Send 在任务队列（taskqueue）启用时入队异步发送并自动重试，
+// 队列未启用时回退为同步直发。
 package notify
 
 import "context"

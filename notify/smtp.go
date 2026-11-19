@@ -18,9 +18,9 @@ const (
 	smtpDefaultTimeout = 30 * time.Second
 )
 
-// Config 是 SMTP 发送配置。
+// SMTPConfig 是 SMTP 发送配置。
 // TLS 为 true 时要求服务器支持 STARTTLS；为 false 时服务器支持则仍会升级。
-type Config struct {
+type SMTPConfig struct {
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
 	Username string `mapstructure:"username"`
@@ -31,7 +31,7 @@ type Config struct {
 
 // SMTPSender 是基于 net/smtp 的邮件发送器。
 type SMTPSender struct {
-	cfg          Config
+	cfg          SMTPConfig
 	fromHeader   string
 	envelopeFrom string
 }
@@ -39,7 +39,7 @@ type SMTPSender struct {
 var _ Sender = (*SMTPSender)(nil)
 
 // NewSMTP 创建 SMTP 发送器，只校验配置，不建立连接。
-func NewSMTP(cfg Config) (*SMTPSender, error) {
+func NewSMTP(cfg SMTPConfig) (*SMTPSender, error) {
 	cfg.Host = strings.TrimSpace(cfg.Host)
 	cfg.From = strings.TrimSpace(cfg.From)
 	if cfg.Host == "" {
