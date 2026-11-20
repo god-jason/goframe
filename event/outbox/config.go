@@ -1,4 +1,4 @@
-package outbox
+﻿package outbox
 
 import (
 	"time"
@@ -9,19 +9,19 @@ import (
 // Config 是 Outbox 投递配置。
 type Config struct {
 	// Enabled 控制是否自动启动后台投递。
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// Interval 是轮询间隔。
-	Interval time.Duration `mapstructure:"interval"`
+	Interval time.Duration `yaml:"interval"`
 	// BatchSize 是单次领取的消息数。
-	BatchSize int `mapstructure:"batch_size"`
+	BatchSize int `yaml:"batch_size"`
 	// MaxAttempts 是最大投递次数。
-	MaxAttempts int `mapstructure:"max_attempts"`
+	MaxAttempts int `yaml:"max_attempts"`
 	// BaseDelay 是首次重试延迟。
-	BaseDelay time.Duration `mapstructure:"base_delay"`
+	BaseDelay time.Duration `yaml:"base_delay"`
 	// MaxDelay 是退避上限。
-	MaxDelay time.Duration `mapstructure:"max_delay"`
+	MaxDelay time.Duration `yaml:"max_delay"`
 	// LeaseTimeout 是领取租约。
-	LeaseTimeout time.Duration `mapstructure:"lease_timeout"`
+	LeaseTimeout time.Duration `yaml:"lease_timeout"`
 }
 
 // DefaultConfig 返回 Outbox 默认配置。

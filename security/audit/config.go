@@ -1,12 +1,12 @@
-package audit
+﻿package audit
 
 import "github.com/god-jason/goframe/config"
 
 // Config 是审计配置。
 type Config struct {
-	Enabled       bool            `mapstructure:"enabled"`
-	MaxDetailSize config.ByteSize `mapstructure:"max_detail_size"`
-	SkipActions   []string        `mapstructure:"skip_actions"`
+	Enabled       bool            `yaml:"enabled"`
+	MaxDetailSize config.ByteSize `yaml:"max_detail_size"`
+	SkipActions   []string        `yaml:"skip_actions"`
 }
 
 // DefaultConfig 返回审计默认配置。

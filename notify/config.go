@@ -1,4 +1,4 @@
-package notify
+﻿package notify
 
 import (
 	"fmt"
@@ -10,17 +10,17 @@ import (
 // Config 是通知组件的全局配置。
 type Config struct {
 	// Enabled 控制是否启用通知组件。
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// Channel 是发送通道：smtp / webhook。
-	Channel string `mapstructure:"channel"`
+	Channel string `yaml:"channel"`
 	// Queue 是任务队列启用时投递的队列名。
-	Queue string `mapstructure:"queue"`
+	Queue string `yaml:"queue"`
 	// MaxRetry 是队列任务的重试次数。
-	MaxRetry int `mapstructure:"max_retry"`
+	MaxRetry int `yaml:"max_retry"`
 	// SMTP 是邮件通道配置。
-	SMTP SMTPConfig `mapstructure:"smtp"`
+	SMTP SMTPConfig `yaml:"smtp"`
 	// Webhook 是 Webhook 通道配置。
-	Webhook WebhookConfig `mapstructure:"webhook"`
+	Webhook WebhookConfig `yaml:"webhook"`
 }
 
 // DefaultConfig 返回通知默认配置。

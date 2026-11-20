@@ -1,4 +1,4 @@
-package upload
+﻿package upload
 
 import (
 	"bufio"
@@ -20,8 +20,8 @@ const (
 
 // ClamAVConfig 是 clamd 扫描器配置。
 type ClamAVConfig struct {
-	Addr    string        `mapstructure:"addr"`
-	Timeout time.Duration `mapstructure:"timeout"`
+	Addr    string        `yaml:"addr"`
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 // DefaultClamAVConfig 返回 clamd 默认配置。

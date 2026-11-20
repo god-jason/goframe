@@ -1,13 +1,13 @@
-package crypto
+﻿package crypto
 
 import "sync"
 
 // Config 是数据加密配置。
 type Config struct {
-	Algorithm   string `mapstructure:"algorithm"`
-	KeyProvider string `mapstructure:"key_provider"`
-	KeyID       string `mapstructure:"key_id"`
-	Key         string `mapstructure:"key"`
+	Algorithm   string `yaml:"algorithm"`
+	KeyProvider string `yaml:"key_provider"`
+	KeyID       string `yaml:"key_id"`
+	Key         string `yaml:"key"`
 }
 
 // DefaultConfig 返回加密默认配置。

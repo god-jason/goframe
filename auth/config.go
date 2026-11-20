@@ -1,4 +1,4 @@
-package auth
+﻿package auth
 
 import (
 	"fmt"
@@ -10,22 +10,22 @@ import (
 
 // PasswordConfig 是密码哈希配置。
 type PasswordConfig struct {
-	Algorithm   string `mapstructure:"algorithm"`
-	Memory      uint32 `mapstructure:"memory"`
-	Iterations  uint32 `mapstructure:"iterations"`
-	Parallelism uint8  `mapstructure:"parallelism"`
+	Algorithm   string `yaml:"algorithm"`
+	Memory      uint32 `yaml:"memory"`
+	Iterations  uint32 `yaml:"iterations"`
+	Parallelism uint8  `yaml:"parallelism"`
 }
 
 // Config 是认证配置。
 type Config struct {
-	Enabled         bool           `mapstructure:"enabled"`
-	Issuer          string         `mapstructure:"issuer"`
-	Audience        string         `mapstructure:"audience"`
-	Secret          string         `mapstructure:"secret"`
-	AccessTokenTTL  time.Duration  `mapstructure:"access_token_ttl"`
-	RefreshTokenTTL time.Duration  `mapstructure:"refresh_token_ttl"`
-	Leeway          time.Duration  `mapstructure:"leeway"`
-	Password        PasswordConfig `mapstructure:"password"`
+	Enabled         bool           `yaml:"enabled"`
+	Issuer          string         `yaml:"issuer"`
+	Audience        string         `yaml:"audience"`
+	Secret          string         `yaml:"secret"`
+	AccessTokenTTL  time.Duration  `yaml:"access_token_ttl"`
+	RefreshTokenTTL time.Duration  `yaml:"refresh_token_ttl"`
+	Leeway          time.Duration  `yaml:"leeway"`
+	Password        PasswordConfig `yaml:"password"`
 }
 
 // DefaultConfig 返回认证默认配置。

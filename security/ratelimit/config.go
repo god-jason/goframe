@@ -1,12 +1,12 @@
-package ratelimit
+﻿package ratelimit
 
 // Config 是限流配置。
 type Config struct {
-	Enabled     bool    `mapstructure:"enabled"`
-	GlobalRate  float64 `mapstructure:"global_rate"`
-	GlobalBurst int     `mapstructure:"global_burst"`
-	MaxBuckets  int     `mapstructure:"max_buckets"`
-	FailOpen    bool    `mapstructure:"fail_open"`
+	Enabled     bool    `yaml:"enabled"`
+	GlobalRate  float64 `yaml:"global_rate"`
+	GlobalBurst int     `yaml:"global_burst"`
+	MaxBuckets  int     `yaml:"max_buckets"`
+	FailOpen    bool    `yaml:"fail_open"`
 }
 
 // DefaultConfig 返回限流默认配置。

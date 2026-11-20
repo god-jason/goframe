@@ -1,12 +1,12 @@
-package scheduler
+﻿package scheduler
 
 import "time"
 
 // Config 是定时任务配置。
 type Config struct {
-	Enabled    bool          `mapstructure:"enabled"`
-	JobTimeout time.Duration `mapstructure:"job_timeout"`
-	Location   string        `mapstructure:"location"`
+	Enabled    bool          `yaml:"enabled"`
+	JobTimeout time.Duration `yaml:"job_timeout"`
+	Location   string        `yaml:"location"`
 }
 
 // DefaultConfig 返回定时任务默认配置。

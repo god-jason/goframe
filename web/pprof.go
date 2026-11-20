@@ -1,13 +1,13 @@
-package web
+﻿package web
 
 import "github.com/god-jason/goframe/config"
 
 // PProfConfig 是 pprof 路由配置。
 type PProfConfig struct {
 	// Enabled 控制是否在 Web 引擎上注册 pprof 路由。生产环境默认关闭。
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// Path 是 pprof 路由前缀。
-	Path string `mapstructure:"path"`
+	Path string `yaml:"path"`
 }
 
 // DefaultPProfConfig 返回 pprof 默认配置。

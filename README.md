@@ -813,8 +813,8 @@ detail / created_at
 ```go
 // logger/config.go
 type Config struct {
-    Level  string `mapstructure:"level"`
-    Output string `mapstructure:"output"`
+    Level  string `yaml:"level"`
+    Output string `yaml:"output"`
 }
 
 func DefaultConfig() Config { return Config{Level: "info", Output: "logs/app.log"} }

@@ -1,4 +1,4 @@
-package secrets
+﻿package secrets
 
 import (
 	"bytes"
@@ -13,11 +13,11 @@ import (
 
 // VaultConfig 是 HashiCorp Vault KV v2 配置。
 type VaultConfig struct {
-	Address   string        `mapstructure:"address"`
-	Token     string        `mapstructure:"token"`
-	Namespace string        `mapstructure:"namespace"`
-	Mount     string        `mapstructure:"mount"`
-	Timeout   time.Duration `mapstructure:"timeout"`
+	Address   string        `yaml:"address"`
+	Token     string        `yaml:"token"`
+	Namespace string        `yaml:"namespace"`
+	Mount     string        `yaml:"mount"`
+	Timeout   time.Duration `yaml:"timeout"`
 }
 
 // DefaultVaultConfig 返回 Vault 默认配置。

@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"fmt"
@@ -8,13 +8,13 @@ import (
 
 // Config 是数据库配置。
 type Config struct {
-	Driver          string        `mapstructure:"driver"`
-	DSN             string        `mapstructure:"dsn"`
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
-	SlowThreshold   time.Duration `mapstructure:"slow_threshold"`
-	LogLevel        string        `mapstructure:"log_level"`
+	Driver          string        `yaml:"driver"`
+	DSN             string        `yaml:"dsn"`
+	MaxOpenConns    int           `yaml:"max_open_conns"`
+	MaxIdleConns    int           `yaml:"max_idle_conns"`
+	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
+	SlowThreshold   time.Duration `yaml:"slow_threshold"`
+	LogLevel        string        `yaml:"log_level"`
 }
 
 // DefaultConfig 返回数据库默认配置。

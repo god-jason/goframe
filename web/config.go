@@ -1,4 +1,4 @@
-package web
+﻿package web
 
 import (
 	"fmt"
@@ -11,28 +11,28 @@ import (
 
 // RequestConfig 是请求限制配置。
 type RequestConfig struct {
-	MaxBodySize     config.ByteSize `mapstructure:"max_body_size"`
-	MaxQueryLength  int             `mapstructure:"max_query_length"`
-	AllowedMethods  []string        `mapstructure:"allowed_methods"`
-	RequireJSONBody bool            `mapstructure:"require_json_body"`
+	MaxBodySize     config.ByteSize `yaml:"max_body_size"`
+	MaxQueryLength  int             `yaml:"max_query_length"`
+	AllowedMethods  []string        `yaml:"allowed_methods"`
+	RequireJSONBody bool            `yaml:"require_json_body"`
 }
 
 // Config 是 HTTP 服务配置。
 type Config struct {
-	Host              string        `mapstructure:"host"`
-	Port              int           `mapstructure:"port"`
-	Mode              string        `mapstructure:"mode"`
-	ReadTimeout       time.Duration `mapstructure:"read_timeout"`
-	ReadHeaderTimeout time.Duration `mapstructure:"read_header_timeout"`
-	WriteTimeout      time.Duration `mapstructure:"write_timeout"`
-	IdleTimeout       time.Duration `mapstructure:"idle_timeout"`
-	ShutdownTimeout   time.Duration `mapstructure:"shutdown_timeout"`
-	MaxHeaderBytes    int           `mapstructure:"max_header_bytes"`
-	TrustedProxies    []string      `mapstructure:"trusted_proxies"`
-	APIPrefix         string        `mapstructure:"api_prefix"`
-	APIVersion        string        `mapstructure:"api_version"`
+	Host              string        `yaml:"host"`
+	Port              int           `yaml:"port"`
+	Mode              string        `yaml:"mode"`
+	ReadTimeout       time.Duration `yaml:"read_timeout"`
+	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`
+	WriteTimeout      time.Duration `yaml:"write_timeout"`
+	IdleTimeout       time.Duration `yaml:"idle_timeout"`
+	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout"`
+	MaxHeaderBytes    int           `yaml:"max_header_bytes"`
+	TrustedProxies    []string      `yaml:"trusted_proxies"`
+	APIPrefix         string        `yaml:"api_prefix"`
+	APIVersion        string        `yaml:"api_version"`
 	// Request 是请求方法白名单与请求体等限制配置。
-	Request RequestConfig `mapstructure:"request"`
+	Request RequestConfig `yaml:"request"`
 }
 
 // Addr 返回监听地址。
@@ -93,22 +93,22 @@ func DefaultConfig() Config {
 
 // ACMEConfig 是 ACME 自动证书配置。
 type ACMEConfig struct {
-	Email             string        `mapstructure:"email"`
-	Domains           []string      `mapstructure:"domains"`
-	DirectoryURL      string        `mapstructure:"directory_url"`
-	Challenge         string        `mapstructure:"challenge"`
-	CacheDir          string        `mapstructure:"cache_dir"`
-	HTTPChallengeAddr string        `mapstructure:"http_challenge_addr"`
-	DisableHTTP       bool          `mapstructure:"disable_http_challenge"`
-	RenewBefore       time.Duration `mapstructure:"renew_before"`
+	Email             string        `yaml:"email"`
+	Domains           []string      `yaml:"domains"`
+	DirectoryURL      string        `yaml:"directory_url"`
+	Challenge         string        `yaml:"challenge"`
+	CacheDir          string        `yaml:"cache_dir"`
+	HTTPChallengeAddr string        `yaml:"http_challenge_addr"`
+	DisableHTTP       bool          `yaml:"disable_http_challenge"`
+	RenewBefore       time.Duration `yaml:"renew_before"`
 }
 
 // TLSConfig 是 TLS 配置。
 type TLSConfig struct {
-	Mode     string     `mapstructure:"mode"`
-	CertFile string     `mapstructure:"cert_file"`
-	KeyFile  string     `mapstructure:"key_file"`
-	ACME     ACMEConfig `mapstructure:"acme"`
+	Mode     string     `yaml:"mode"`
+	CertFile string     `yaml:"cert_file"`
+	KeyFile  string     `yaml:"key_file"`
+	ACME     ACMEConfig `yaml:"acme"`
 }
 
 // Validate 校验 TLS 配置。

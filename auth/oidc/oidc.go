@@ -1,4 +1,4 @@
-// Package oidc 提供基于 OpenID Connect 的授权码登录与 ID Token 校验能力。
+﻿// Package oidc 提供基于 OpenID Connect 的授权码登录与 ID Token 校验能力。
 package oidc
 
 import (
@@ -13,11 +13,11 @@ import (
 
 // Config 是 OIDC 客户端配置。
 type Config struct {
-	Issuer       string   `mapstructure:"issuer"`
-	ClientID     string   `mapstructure:"client_id"`
-	ClientSecret string   `mapstructure:"client_secret"`
-	RedirectURL  string   `mapstructure:"redirect_url"`
-	Scopes       []string `mapstructure:"scopes"`
+	Issuer       string   `yaml:"issuer"`
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret"`
+	RedirectURL  string   `yaml:"redirect_url"`
+	Scopes       []string `yaml:"scopes"`
 }
 
 // Validate 校验 OIDC 配置。

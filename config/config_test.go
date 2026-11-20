@@ -1,4 +1,4 @@
-package config
+﻿package config
 
 import (
 	"os"
@@ -35,11 +35,11 @@ func TestParseByteSize(t *testing.T) {
 }
 
 type testSectionConfig struct {
-	Name     string        `mapstructure:"name"`
-	Timeout  time.Duration `mapstructure:"timeout"`
-	Size     ByteSize      `mapstructure:"size"`
-	MaxItems int           `mapstructure:"max_items"`
-	Enabled  bool          `mapstructure:"enabled"`
+	Name     string        `yaml:"name"`
+	Timeout  time.Duration `yaml:"timeout"`
+	Size     ByteSize      `yaml:"size"`
+	MaxItems int           `yaml:"max_items"`
+	Enabled  bool          `yaml:"enabled"`
 }
 
 func TestSectionLoadsFileAndKeepsDefaults(t *testing.T) {

@@ -1,4 +1,4 @@
-package websocket
+﻿package websocket
 
 import (
 	"time"
@@ -8,18 +8,18 @@ import (
 
 // Config 是 WebSocket Hub 配置。
 type Config struct {
-	Enabled        bool            `mapstructure:"enabled"`
-	Path           string          `mapstructure:"path"`
-	AllowedOrigins []string        `mapstructure:"allowed_origins"`
-	MaxMessageSize config.ByteSize `mapstructure:"max_message_size"`
-	ReadTimeout    time.Duration   `mapstructure:"read_timeout"`
-	WriteTimeout   time.Duration   `mapstructure:"write_timeout"`
-	PingInterval   time.Duration   `mapstructure:"ping_interval"`
-	SendQueue      int             `mapstructure:"send_queue"`
-	InboundQueue   int             `mapstructure:"inbound_queue"`
-	AllowAnonymous bool            `mapstructure:"allow_anonymous"`
+	Enabled        bool            `yaml:"enabled"`
+	Path           string          `yaml:"path"`
+	AllowedOrigins []string        `yaml:"allowed_origins"`
+	MaxMessageSize config.ByteSize `yaml:"max_message_size"`
+	ReadTimeout    time.Duration   `yaml:"read_timeout"`
+	WriteTimeout   time.Duration   `yaml:"write_timeout"`
+	PingInterval   time.Duration   `yaml:"ping_interval"`
+	SendQueue      int             `yaml:"send_queue"`
+	InboundQueue   int             `yaml:"inbound_queue"`
+	AllowAnonymous bool            `yaml:"allow_anonymous"`
 	// MaxTopics 是单个连接允许订阅的主题数量上限。
-	MaxTopics int `mapstructure:"max_topics"`
+	MaxTopics int `yaml:"max_topics"`
 }
 
 // DefaultConfig 返回 WebSocket 默认配置。

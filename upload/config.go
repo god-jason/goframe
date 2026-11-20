@@ -1,18 +1,18 @@
-package upload
+﻿package upload
 
 import "github.com/god-jason/goframe/config"
 
 // Config 是文件上传配置。
 type Config struct {
-	MaxSize           config.ByteSize `mapstructure:"max_size"`
-	ScanEnabled       bool            `mapstructure:"scan_enabled"`
-	ClamAV            ClamAVConfig    `mapstructure:"clamav"`
-	AllowedExtensions []string        `mapstructure:"allowed_extensions"`
-	AllowedMIMETypes  []string        `mapstructure:"allowed_mime_types"`
-	ImageMaxWidth     int             `mapstructure:"image_max_width"`
-	ImageMaxHeight    int             `mapstructure:"image_max_height"`
-	ImageMaxPixels    int64           `mapstructure:"image_max_pixels"`
-	ImageQuality      int             `mapstructure:"image_quality"`
+	MaxSize           config.ByteSize `yaml:"max_size"`
+	ScanEnabled       bool            `yaml:"scan_enabled"`
+	ClamAV            ClamAVConfig    `yaml:"clamav"`
+	AllowedExtensions []string        `yaml:"allowed_extensions"`
+	AllowedMIMETypes  []string        `yaml:"allowed_mime_types"`
+	ImageMaxWidth     int             `yaml:"image_max_width"`
+	ImageMaxHeight    int             `yaml:"image_max_height"`
+	ImageMaxPixels    int64           `yaml:"image_max_pixels"`
+	ImageQuality      int             `yaml:"image_quality"`
 }
 
 // DefaultConfig 返回上传默认配置。

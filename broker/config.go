@@ -1,29 +1,29 @@
-package broker
+﻿package broker
 
 import "time"
 
 // TLSConfig 是 Broker 监听 TLS 配置。
 type TLSConfig struct {
-	Enabled  bool   `mapstructure:"enabled"`
-	CertFile string `mapstructure:"cert_file"`
-	KeyFile  string `mapstructure:"key_file"`
+	Enabled  bool   `yaml:"enabled"`
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
 }
 
 // Config 是嵌入式 MQTT Broker 配置。
 type Config struct {
-	Enabled            bool          `mapstructure:"enabled"`
-	Addr               string        `mapstructure:"addr"`
-	AllowAnonymous     bool          `mapstructure:"allow_anonymous"`
-	MaxPacketSize      int64         `mapstructure:"max_packet_size"`
-	MaxClients         int           `mapstructure:"max_clients"`
-	MaxSubscriptions   int           `mapstructure:"max_subscriptions"`
-	MaxQueuedMessages  int           `mapstructure:"max_queued_messages"`
-	SessionExpiry      time.Duration `mapstructure:"session_expiry"`
-	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
-	ConnectTimeout     time.Duration `mapstructure:"connect_timeout"`
-	RetransmitInterval time.Duration `mapstructure:"retransmit_interval"`
-	SendQueue          int           `mapstructure:"send_queue"`
-	TLS                TLSConfig     `mapstructure:"tls"`
+	Enabled            bool          `yaml:"enabled"`
+	Addr               string        `yaml:"addr"`
+	AllowAnonymous     bool          `yaml:"allow_anonymous"`
+	MaxPacketSize      int64         `yaml:"max_packet_size"`
+	MaxClients         int           `yaml:"max_clients"`
+	MaxSubscriptions   int           `yaml:"max_subscriptions"`
+	MaxQueuedMessages  int           `yaml:"max_queued_messages"`
+	SessionExpiry      time.Duration `yaml:"session_expiry"`
+	WriteTimeout       time.Duration `yaml:"write_timeout"`
+	ConnectTimeout     time.Duration `yaml:"connect_timeout"`
+	RetransmitInterval time.Duration `yaml:"retransmit_interval"`
+	SendQueue          int           `yaml:"send_queue"`
+	TLS                TLSConfig     `yaml:"tls"`
 }
 
 // DefaultConfig 返回 Broker 默认配置。

@@ -1,28 +1,28 @@
-package logger
+﻿package logger
 
 // RotationConfig 是日志滚动配置，单独定义在 logger 包内。
 type RotationConfig struct {
 	// Enabled 是否开启滚动；默认开启。
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// MaxSize 是单个日志文件上限。
-	MaxSize int64 `mapstructure:"max_size"`
+	MaxSize int64 `yaml:"max_size"`
 	// MaxAge 是旧日志保留天数。
-	MaxAge int `mapstructure:"max_age"`
+	MaxAge int `yaml:"max_age"`
 	// MaxBackups 是旧日志保留数量。
-	MaxBackups int `mapstructure:"max_backups"`
+	MaxBackups int `yaml:"max_backups"`
 	// Compress 是否压缩旧日志。
-	Compress bool `mapstructure:"compress"`
+	Compress bool `yaml:"compress"`
 	// LocalTime 备份时间是否使用本地时区。
-	LocalTime bool `mapstructure:"local_time"`
+	LocalTime bool `yaml:"local_time"`
 }
 
 // Config 是 logger 包配置。
 type Config struct {
-	Level  string `mapstructure:"level"`
-	Format string `mapstructure:"format"`
+	Level  string `yaml:"level"`
+	Format string `yaml:"format"`
 	// Output 可以是 stdout / stderr / 文件路径；为空时写入 logs/app.log。
-	Output   string         `mapstructure:"output"`
-	Rotation RotationConfig `mapstructure:"rotation"`
+	Output   string         `yaml:"output"`
+	Rotation RotationConfig `yaml:"rotation"`
 }
 
 // DefaultConfig 返回 logger 默认配置。

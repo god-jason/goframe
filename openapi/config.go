@@ -1,4 +1,4 @@
-// Package openapi 提供 Swagger UI 文档页面注册。
+﻿// Package openapi 提供 Swagger UI 文档页面注册。
 //
 // 业务需要先通过 swag 生成文档并在启动入口匿名导入生成的 docs 包：
 //
@@ -16,9 +16,9 @@ import (
 // Config 是 OpenAPI 文档配置。
 type Config struct {
 	// Enabled 控制是否注册文档路由。生产环境通常保持关闭或仅在内部网络开启。
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// Path 是 Swagger UI 的挂载路径。
-	Path string `mapstructure:"path"`
+	Path string `yaml:"path"`
 }
 
 // DefaultConfig 返回 OpenAPI 文档默认配置。

@@ -1,4 +1,4 @@
-package notify
+﻿package notify
 
 import (
 	"bytes"
@@ -19,10 +19,10 @@ const webhookDefaultTimeout = 10 * time.Second
 
 // WebhookConfig 是 Webhook 发送配置。
 type WebhookConfig struct {
-	URL     string            `mapstructure:"url"`
-	Secret  string            `mapstructure:"secret"`
-	Headers map[string]string `mapstructure:"headers"`
-	Timeout time.Duration     `mapstructure:"timeout"`
+	URL     string            `yaml:"url"`
+	Secret  string            `yaml:"secret"`
+	Headers map[string]string `yaml:"headers"`
+	Timeout time.Duration     `yaml:"timeout"`
 }
 
 // WebhookSender 以 HTTP POST JSON 的方式发送消息。

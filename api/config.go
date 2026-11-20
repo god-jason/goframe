@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import "github.com/god-jason/goframe/config"
 
@@ -10,10 +10,10 @@ type Options struct {
 
 // SPAConfig 是前端静态资源配置。
 type SPAConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Mode    string `mapstructure:"mode"`
-	Path    string `mapstructure:"path"`
-	Index   string `mapstructure:"index"`
+	Enabled bool   `yaml:"enabled"`
+	Mode    string `yaml:"mode"`
+	Path    string `yaml:"path"`
+	Index   string `yaml:"index"`
 }
 
 // DefaultSPAConfig 返回 SPA 默认配置。

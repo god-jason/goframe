@@ -1,4 +1,4 @@
-package config
+﻿package config
 
 import (
 	"context"
@@ -93,14 +93,14 @@ func TestRegisterRejectsEmptyName(t *testing.T) {
 }
 
 type collectInner struct {
-	B string `mapstructure:"b"`
+	B string `yaml:"b"`
 }
 
 type collectFixture struct {
-	A       string        `mapstructure:"a"`
-	Ptr     *collectInner `mapstructure:"ptr"`
-	Skipped string        `mapstructure:"-"`
-	List    []string      `mapstructure:"list"`
+	A       string        `yaml:"a"`
+	Ptr     *collectInner `yaml:"ptr"`
+	Skipped string        `yaml:"-"`
+	List    []string      `yaml:"list"`
 	hidden  string
 }
 
@@ -164,7 +164,7 @@ func TestOnReloadCallbacksAndPanicIsolation(t *testing.T) {
 }
 
 type watchConfig struct {
-	Name string `mapstructure:"name"`
+	Name string `yaml:"name"`
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -293,8 +293,8 @@ func TestLoadSectionsMissingNonExplicit(t *testing.T) {
 
 type nestedConfig struct {
 	Deep struct {
-		Value string `mapstructure:"value"`
-	} `mapstructure:"deep"`
+		Value string `yaml:"value"`
+	} `yaml:"deep"`
 }
 
 func TestEnvOverrideNested(t *testing.T) {
@@ -330,7 +330,7 @@ func TestEnvOverrideReplacesScalarParent(t *testing.T) {
 }
 
 type decodeConfig struct {
-	Size ByteSize `mapstructure:"size"`
+	Size ByteSize `yaml:"size"`
 }
 
 func TestReloadDecodeError(t *testing.T) {
@@ -412,12 +412,12 @@ func TestStartupResolvesDefaultFile(t *testing.T) {
 
 type collectDefault struct {
 	Untagged string
-	Skipped  string `mapstructure:"-"`
+	Skipped  string `yaml:"-"`
 	hidden   string
 }
 
 type collectEmpty struct {
-	Skipped string `mapstructure:"-"`
+	Skipped string `yaml:"-"`
 	hidden  string
 }
 
@@ -436,7 +436,7 @@ func TestRegisterCollectsDefaultAndEmptyKeys(t *testing.T) {
 }
 
 type lookupConfig struct {
-	V string `mapstructure:"v"`
+	V string `yaml:"v"`
 }
 
 func TestLookupSkipsNonMapParent(t *testing.T) {

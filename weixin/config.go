@@ -1,4 +1,4 @@
-// Package weixin 提供微信公众号与微信小程序的鉴权、登录与消息校验能力。
+﻿// Package weixin 提供微信公众号与微信小程序的鉴权、登录与消息校验能力。
 //
 // 支持多应用配置：公众号 OAuth2 登录、JS-SDK 签名、服务端消息签名与 AES 解密；
 // 小程序 code2Session、手机号获取与加密数据解密。AccessToken/Ticket 自动缓存与刷新。
@@ -25,27 +25,27 @@ const (
 // AppConfig 是单个微信应用配置。
 type AppConfig struct {
 	// Name 是应用标识，业务通过该名称获取客户端。
-	Name string `mapstructure:"name"`
+	Name string `yaml:"name"`
 	// Type 为 official 或 mini。
-	Type string `mapstructure:"type"`
+	Type string `yaml:"type"`
 	// AppID 与 AppSecret 是微信应用凭证。
-	AppID     string `mapstructure:"app_id"`
-	AppSecret string `mapstructure:"app_secret"`
+	AppID     string `yaml:"app_id"`
+	AppSecret string `yaml:"app_secret"`
 	// Token 是服务端消息校验 Token。
-	Token string `mapstructure:"token"`
+	Token string `yaml:"token"`
 	// EncodingAESKey 是消息加解密密钥（43 位）。
-	EncodingAESKey string `mapstructure:"encoding_aes_key"`
+	EncodingAESKey string `yaml:"encoding_aes_key"`
 	// OAuthRedirect 是公众号网页授权默认回调地址。
-	OAuthRedirect string `mapstructure:"oauth_redirect"`
+	OAuthRedirect string `yaml:"oauth_redirect"`
 	// Default 标记默认应用。
-	Default bool `mapstructure:"default"`
+	Default bool `yaml:"default"`
 }
 
 // Config 是微信组件配置。
 type Config struct {
-	Enabled bool          `mapstructure:"enabled"`
-	Timeout time.Duration `mapstructure:"timeout"`
-	Apps    []AppConfig   `mapstructure:"apps"`
+	Enabled bool          `yaml:"enabled"`
+	Timeout time.Duration `yaml:"timeout"`
+	Apps    []AppConfig   `yaml:"apps"`
 }
 
 // DefaultConfig 返回微信组件默认配置。

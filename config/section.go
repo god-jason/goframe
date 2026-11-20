@@ -59,7 +59,7 @@ func (s *Section[T]) load(raw map[string]any) error {
 	if data, ok := lookupMap(raw, s.name); ok {
 		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 			Result:           &value,
-			TagName:          "mapstructure",
+			TagName:          "yaml",
 			WeaklyTypedInput: true,
 			DecodeHook: mapstructure.ComposeDecodeHookFunc(
 				mapstructure.StringToTimeDurationHookFunc(),
@@ -116,7 +116,7 @@ func collectKeys(prefix string, t reflect.Type) []string {
 		if field.PkgPath != "" {
 			continue
 		}
-		tag := field.Tag.Get("mapstructure")
+		tag := field.Tag.Get("yaml")
 		if tag == "-" {
 			continue
 		}

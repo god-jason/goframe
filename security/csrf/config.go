@@ -1,15 +1,15 @@
-package csrf
+﻿package csrf
 
 import "time"
 
 // Config 是 CSRF 配置。
 type Config struct {
-	Enabled    bool          `mapstructure:"enabled"`
-	CookieName string        `mapstructure:"cookie_name"`
-	HeaderName string        `mapstructure:"header_name"`
-	TTL        time.Duration `mapstructure:"ttl"`
-	Secure     bool          `mapstructure:"secure"`
-	Secret     string        `mapstructure:"secret"`
+	Enabled    bool          `yaml:"enabled"`
+	CookieName string        `yaml:"cookie_name"`
+	HeaderName string        `yaml:"header_name"`
+	TTL        time.Duration `yaml:"ttl"`
+	Secure     bool          `yaml:"secure"`
+	Secret     string        `yaml:"secret"`
 }
 
 // DefaultConfig 返回 CSRF 默认配置。
