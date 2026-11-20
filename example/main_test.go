@@ -79,7 +79,7 @@ func TestRunContextStartupFailure(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("startup failure = %d", code)
 	}
-	if !bytes.Contains(stderr.Bytes(), []byte("startup:")) {
+	if !bytes.Contains(stderr.Bytes(), []byte("run:")) {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -216,7 +216,7 @@ server:
 
 	var stderr bytes.Buffer
 	code := runContext(ctx, []string{"-config", configPath}, io.Discard, &stderr)
-	if code != 0 {
+	if code != 1 {
 		t.Fatalf("web error code = %d", code)
 	}
 	if !bytes.Contains(stderr.Bytes(), []byte("run web:")) {
@@ -260,7 +260,7 @@ server:
 
 	var stderr bytes.Buffer
 	code := runContext(ctx, []string{"-config", configPath}, io.Discard, &stderr)
-	if code != 0 {
+	if code != 1 {
 		t.Fatalf("shutdown error code = %d", code)
 	}
 	if !bytes.Contains(stderr.Bytes(), []byte("shutdown:")) {

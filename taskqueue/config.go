@@ -14,29 +14,29 @@ import (
 // Config 是任务队列配置。
 type Config struct {
 	// Enabled 控制是否启用任务队列。
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled"`
 	// Addr 是 Redis 地址；为空时复用 redis 段的连接配置。
-	Addr string `mapstructure:"addr"`
+	Addr string `yaml:"addr"`
 	// Username 是 Redis ACL 用户名（Addr 显式配置时生效）。
-	Username string `mapstructure:"username"`
+	Username string `yaml:"username"`
 	// Password 是 Redis 密码（Addr 显式配置时生效）。
-	Password string `mapstructure:"password"`
+	Password string `yaml:"password"`
 	// DB 是 Redis 库编号。
-	DB int `mapstructure:"db"`
+	DB int `yaml:"db"`
 	// Concurrency 是 worker 并发量。
-	Concurrency int `mapstructure:"concurrency"`
+	Concurrency int `yaml:"concurrency"`
 	// Queues 是队列名到权重的映射，决定各队列的消费比例。
-	Queues map[string]int `mapstructure:"queues"`
+	Queues map[string]int `yaml:"queues"`
 	// StrictPriority 为 true 时严格按队列优先级消费，而非按权重轮转。
-	StrictPriority bool `mapstructure:"strict_priority"`
+	StrictPriority bool `yaml:"strict_priority"`
 	// ShutdownTimeout 是优雅停机等待任务完成的最长时间。
-	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
 	// MaxRetry 是入队任务的默认重试次数。
-	MaxRetry int `mapstructure:"max_retry"`
+	MaxRetry int `yaml:"max_retry"`
 	// TaskTimeout 是单个任务的默认执行超时。
-	TaskTimeout time.Duration `mapstructure:"task_timeout"`
+	TaskTimeout time.Duration `yaml:"task_timeout"`
 	// LogLevel 是 Asynq 内部日志级别：debug / info / warn / error / fatal。
-	LogLevel string `mapstructure:"log_level"`
+	LogLevel string `yaml:"log_level"`
 }
 
 // DefaultConfig 返回任务队列默认配置。

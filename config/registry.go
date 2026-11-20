@@ -17,9 +17,9 @@ import (
 
 // AppConfig 是应用元信息，属于 config 包自身配置。
 type AppConfig struct {
-	Name        string `mapstructure:"name"`
-	Version     string `mapstructure:"version"`
-	Environment string `mapstructure:"environment"`
+	Name        string `yaml:"name"`
+	Version     string `yaml:"version"`
+	Environment string `yaml:"environment"`
 }
 
 // DefaultAppConfig 返回应用元信息默认值。

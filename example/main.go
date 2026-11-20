@@ -2,10 +2,9 @@
 //
 // 启动顺序：
 //  1. main 设置配置路径与可选注入（WebSocket 鉴权、Broker 鉴权等）；
-//  2. boot.Startup 按依赖拓扑启动 config、logger、数据库、缓存、MQTT、Broker、Web 引擎等；
-//  3. 业务模块手动初始化并注册路由；
-//  4. web.Run 最后启动 HTTP 服务；
-//  5. 收到退出信号后 boot.Shutdown 逆序释放资源。
+//  2. boot.Run 监听退出信号，按依赖拓扑启动 config、logger、数据库、缓存、MQTT、Broker 等；
+//  3. serve 回调里业务模块手动初始化并注册路由，最后 web.Run 启动 HTTP 服务并阻塞；
+//  4. 收到 SIGINT/SIGTERM、ctx 取消或 web.Run 返回后，boot.Run 逆序释放资源。
 //
 // 运行：go run ./example
 // 默认监听 :8080，使用内存会话与内存缓存；未配置数据库时不连接数据库。
@@ -18,9 +17,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/god-jason/goframe/boot"
 	_ "github.com/god-jason/goframe/bootstrap"
@@ -34,10 +30,9 @@ func main() {
 }
 
 // run 启动示例服务并阻塞，直到 ctx 取消或服务异常退出，返回进程退出码。
+// 退出信号监听由 boot.Run 内部完成。
 func run(args []string, stdout, stderr io.Writer) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	return runContext(ctx, args, stdout, stderr)
+	return runContext(context.Background(), args, stdout, stderr)
 }
 
 // runContext 与 run 相同，但允许调用方注入可取消的 context 便于测试。
@@ -56,39 +51,25 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		config.SetFile(*configFile)
 	}
 
-	if err := boot.Startup(ctx); err != nil {
-		fmt.Fprintf(stderr, "startup: %v\n", err)
-		return 1
+	// serve 在基础设施就绪后运行：业务模块初始化、挂载路由，最后启动 HTTP 服务阻塞。
+	serve := func(runCtx context.Context) error {
+		module := demo.New()
+		if err := module.Init(); err != nil {
+			return fmt.Errorf("initialize module: %w", err)
+		}
+		// 业务模块登记的接口在这里统一挂载到 web。
+		if err := module.Mount(web.API()); err != nil {
+			return fmt.Errorf("mount module apis: %w", err)
+		}
+		if err := web.Run(runCtx); err != nil {
+			return fmt.Errorf("run web: %w", err)
+		}
+		return nil
 	}
 
-	// 业务模块在基础设施就绪后手动初始化，并把路由注册到 web.API()。
-	module := demo.New()
-	if err := module.Init(); err != nil {
-		fmt.Fprintf(stderr, "initialize module: %v\n", err)
-		shutdown(stderr)
+	if err := boot.Run(ctx, serve); err != nil {
+		fmt.Fprintf(stderr, "run: %v\n", err)
 		return 1
 	}
-	// 业务模块登记的接口在这里统一挂载到 web。
-	if err := module.Mount(web.API()); err != nil {
-		fmt.Fprintf(stderr, "mount module apis: %v\n", err)
-		shutdown(stderr)
-		return 1
-	}
-
-	// HTTP 服务最后启动，阻塞到收到退出信号或服务异常。
-	if err := web.Run(ctx); err != nil {
-		fmt.Fprintf(stderr, "run web: %v\n", err)
-	}
-
-	shutdown(stderr)
 	return 0
-}
-
-// shutdown 逆序释放所有 boot 资源。
-func shutdown(stderr io.Writer) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := boot.Shutdown(ctx); err != nil {
-		fmt.Fprintf(stderr, "shutdown: %v\n", err)
-	}
 }

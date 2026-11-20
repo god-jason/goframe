@@ -111,8 +111,9 @@ goframe/
 ├── openapi/        # swaggo OpenAPI 文档
 ├── httpclient/     # HTTP 客户端（重试、熔断、JSON）
 ├── lock/           # 分布式锁（Redis / 内存）
-├── taskqueue/      # 分布式任务队列（Asynq/Redis：并发、队列权重、重试、延迟）
+├── taskqueue/      # 分布式任务队列（Asynq/Redis：并发、队列权重、重试、延迟、运维接口）
 ├── notify/         # 通知（SMTP / Webhook / SMS，可经任务队列异步派发）
+├── cloud/          # 云厂商 SDK：aliyun / tencent / huawei（短信、语音通知/通话、对象存储），按需导入
 ├── i18n/           # 国际化与语言协商
 ├── logger/         # 日志接口与 Zap 实现
 ├── id/             # UUIDv7
@@ -231,7 +232,9 @@ iot-platform/
 | 协程池 / 事件总线 | `pool.Get()` / `event.Get()` |
 | 定时任务 | `scheduler.Get()` |
 | 任务队列 | `taskqueue.Enqueue()` / `taskqueue.Register()` |
+| 任务队列运维 | `taskqueue.InspectQueues()` / `ListTasks()` / `CancelTask()` 等 |
 | 通知 | `notify.Send()` / `notify.GetSender()` |
+| 云服务（按需导入） | `aliyun.GetSms()` / `tencent.GetVoice()` / `huawei.GetStorage()` / `onenet.GetSms()` / `ctyun.GetStorage()` 等，均实现 `cloud.Sms`/`Voice`/`Storage` 统一接口 |
 | MQTT 客户端 / Broker | `mqtt.Get()` / `broker.Get()` |
 | WebSocket | `websocket.Get()` |
 | 认证 / 授权 | `auth.Get()` / `permission.Get()` |
@@ -266,7 +269,8 @@ func init() {
 main 设置配置路径/注入项
 → boot.Startup(ctx)
    config → logger → database → cache → storage → upload
-   → event → pool → scheduler → taskqueue → notify → broker → mqtt → websocket
+   → event → pool → scheduler → taskqueue → notify → cloud-aliyun → cloud-tencent → cloud-huawei → cloud-onenet → cloud-ctyun
+   → broker → mqtt → websocket
    → auth → ratelimit → csrf → audit → crypto → web（仅装配引擎）
 → 业务手动初始化模块并注册路由到 web.API()
 → web.Run(ctx) 最后启动 HTTP 服务
@@ -292,31 +296,25 @@ func (m *Module) RegisterRoutes(r gin.IRouter) {
 }
 ```
 
-启动入口：
+启动入口：推荐使用 `boot.Run`，自动监听 SIGINT/SIGTERM、按依赖拓扑启动、退出时带超时逆序 Shutdown：
 
 ```go
 func main() {
-    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-    defer stop()
-
-    if err := boot.Startup(ctx); err != nil {
+    err := boot.Run(context.Background(), func(ctx context.Context) error {
+        module := user.New()
+        if err := module.Init(); err != nil {
+            return err
+        }
+        module.RegisterRoutes(web.API())
+        return web.Run(ctx) // ctx 收到退出信号后由 web.Run 优雅停止
+    })
+    if err != nil {
         log.Fatal(err)
     }
-
-    module := user.New()
-    if err := module.Init(); err != nil {
-        log.Fatal(err)
-    }
-    module.RegisterRoutes(web.API())
-
-    if err := web.Run(ctx); err != nil {
-        log.Error(err)
-    }
-    shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-    _ = boot.Shutdown(shutdownCtx)
 }
 ```
+
+`boot.Run` 内部流程：`signal.NotifyContext` → `boot.Startup` → 运行 `serve`（或等待取消）→ 以 `WithShutdownTimeout`（默认 30s）执行 `boot.Shutdown`。需要手工控制时也可以继续直接调用 `boot.Startup` / `boot.Shutdown`。
 
 完整示例见 `example/main.go`。只需要部分组件时，按需导入对应包；需要全套标准组件时导入 `bootstrap`：
 
@@ -855,7 +853,12 @@ logger:     # level / format / output / rotation（默认滚动写入文件）
 storage:    # local / s3 / minio
 scheduler:  # 开关、任务超时、时区
 taskqueue:  # Asynq 任务队列：Redis 连接（缺省复用 redis 段）、并发、队列权重、重试
-notify:     # 通知通道 smtp/webhook，队列启用时经 taskqueue 异步派发
+notify:     # 通知通道 smtp/webhook/sms，队列启用时经 taskqueue 异步派发
+aliyun:     # 阿里云 SDK：短信 dysmsapi / 语音 dyvmsapi / 对象存储 OSS（按需导入 cloud/aliyun）
+tencent:    # 腾讯云 SDK：短信 SMS / 语音 VMS / 对象存储 COS（按需导入 cloud/tencent）
+huawei:     # 华为云 SDK：短信 SMS / 语音 VCP / 对象存储 OBS（按需导入 cloud/huawei）
+onenet:     # OneNET 短信能力平台：模板签名短信（按需导入 cloud/onenet）
+ctyun:      # 天翼云：云通信短信（EOP 签名）/ 对象存储 ZOS（S3 兼容）（按需导入 cloud/ctyun）
 pool:       # 后台协程池 worker 与队列
 mqtt:       # 客户端 Broker 列表、认证、TLS、重连
 broker:     # 嵌入式 MQTT Broker、会话、限额、TLS、重传间隔
@@ -1599,9 +1602,52 @@ err := taskqueue.Enqueue(ctx, "report:build", data,
     taskqueue.Queue("default"), taskqueue.Delay(time.Minute))
 ```
 
-`notify` 在配置段声明通道（smtp / webhook）后即可用 `notify.Send` 派发：任务队列启用时入队异步发送并自动重试，未启用时回退为同步直发；也可 `notify.SetSender` 注入自定义发送器。
+`notify` 在配置段声明通道（smtp / webhook / sms）后即可用 `notify.Send` 派发：任务队列启用时入队异步发送并自动重试，未启用时回退为同步直发；也可 `notify.SetSender` 注入自定义发送器。
 
 - `notify.NewSMTP`、`notify.NewWebhook`、`notify.NewSMS` 仍可独立使用。
+- `sms` 通道由已导入并启用的云厂商自动注册（`notify.AddSMSProvider`），多家启用时按序故障转移；未注册任何服务商时发送明确报错。
+
+**任务队列运维接口**
+
+基于 Asynq Inspector，队列启用后可供管理后台直接调用：
+
+```go
+stats, _ := taskqueue.InspectQueues()               // 全部队列统计
+tasks, _ := taskqueue.ListTasks("default", "retry", 1, 30) // 按状态分页列任务（含 archived 死信）
+_ = taskqueue.CancelTask("default", id)             // 取消：非运行态转归档，运行态发取消信号
+_ = taskqueue.RunTaskNow("default", id)             // 立即执行 scheduled/retry/archived 任务
+_ = taskqueue.DeleteTask("default", id)             // 彻底删除
+```
+
+**云服务 SDK（短信 / 语音 / 对象存储）**
+
+`cloud` 包定义与厂商无关的统一能力接口（`cloud.Sms` / `cloud.Voice` / `cloud.Storage`），五个厂商包实现之：`cloud/aliyun`、`cloud/tencent`、`cloud/huawei` 封装官方 SDK，`cloud/onenet`（中国移动 OneNET 短信）、`cloud/ctyun`（天翼云短信 + ZOS 对象存储）基于 REST API。各包提供 `sms`（短信）、`voice`（语音通知/通话，OneNET 无）、`storage`（对象存储，OneNET 无）子服务。云包不在 `bootstrap` 中，按需匿名导入以注册 boot 模块：
+
+```go
+import _ "github.com/god-jason/goframe/cloud/aliyun"
+```
+
+启动后通过全局实例使用（未启用的子服务返回 `nil`）：
+
+```go
+aliyun.GetSms().Send(ctx, []string{"13800000000"}, "示例签名", "SMS_001", map[string]string{"code": "1234"})
+aliyun.GetVoice().SingleCallByTts(ctx, "13800000000", "TTS_001", nil)
+aliyun.GetStorage().Put(ctx, "a/b.txt", strings.NewReader("hi"))
+url, _ := aliyun.GetStorage().SignURL(ctx, "a/b.txt", time.Minute)
+```
+
+需要跨厂商可切换时，依赖统一接口而非具体类型：
+
+```go
+var sms cloud.Sms = aliyun.GetSms() // 或 onenet.GetSms() / ctyun.GetSms()
+_ = sms.SendSms(ctx, &cloud.SmsRequest{
+    PhoneNumbers: []string{"13800000000"},
+    TemplateID:   "SMS_001",
+    Params:       map[string]string{"code": "1234"},
+})
+```
+
+短信走 `notify` 通道时各厂商需要的 `Message.Metadata` 参数：aliyun/ctyun 需 `template_code`（其余键作为模板变量 JSON）；tencent 需 `template_id` 与按序逗号分隔的 `template_params`；huawei 需 `template_id`（其余键按序组成 JSON 数组）；onenet 需 `template_id`（可选 `sign_id`，其余键为具名模板参数）。华为云语音基于 VCP 1.0 `executeCall`，短信/语音仅支持 `cn-north-4` / `cn-south-1` 且必填 `project_id`；天翼云短信使用 EOP AK/SK 签名、单号码逐条下发，ZOS 通过 S3 兼容协议访问。
 
 **i18n、验证码、TOTP、OIDC**
 
@@ -1689,6 +1735,8 @@ acme：autocert 自动申请与续期
 
 ## 部署
 
+上线前逐项核对 [生产部署检查清单](docs/deployment.md)（配置与密钥、外部依赖、TLS、多实例、任务队列与通知、云 SDK 凭据、发布验证）。
+
 ### Linux 裸机
 
 - 单个 Go 可执行文件 + 外部配置文件 + 外部数据目录。
@@ -1709,7 +1757,7 @@ Nginx 可负责 TLS 终止、静态资源、访问限流、反向代理和请求
 
 ### 进程退出
 
-收到 SIGTERM 后：
+`boot.Run` 已自动监听 SIGINT/SIGTERM 并执行以下流程（手动模式需自行实现）。收到 SIGTERM 后：
 
 1. 停止接收新请求。
 2. 等待现有请求完成。

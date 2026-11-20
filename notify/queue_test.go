@@ -42,7 +42,7 @@ func TestNormalizeAndBuildSender(t *testing.T) {
 	if neg := (Config{MaxRetry: -1}).normalize(); neg.MaxRetry != 3 {
 		t.Fatalf("negative max_retry normalize = %d", neg.MaxRetry)
 	}
-	if _, err := (Config{Channel: "sms"}).buildSender(); err == nil {
+	if _, err := (Config{Channel: "carrier-pigeon"}).buildSender(); err == nil {
 		t.Fatal("expected error for unknown channel")
 	}
 	if _, err := (Config{Channel: "webhook"}).buildSender(); err == nil {

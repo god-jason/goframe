@@ -14,9 +14,10 @@ import (
 )
 
 var global = struct {
-	mu     sync.RWMutex
-	client *asynq.Client
-	server *asynq.Server
+	mu        sync.RWMutex
+	client    *asynq.Client
+	server    *asynq.Server
+	inspector *asynq.Inspector
 }{}
 
 func init() {
@@ -65,6 +66,7 @@ func Startup(context.Context) error {
 	global.mu.Lock()
 	global.client = client
 	global.server = server
+	global.inspector = asynq.NewInspector(redisOpt)
 	global.mu.Unlock()
 	registry.started = true
 
@@ -78,8 +80,8 @@ func Startup(context.Context) error {
 // Shutdown 优雅停止消费服务并关闭客户端连接。
 func Shutdown(context.Context) error {
 	global.mu.Lock()
-	client, server := global.client, global.server
-	global.client, global.server = nil, nil
+	client, server, inspector := global.client, global.server, global.inspector
+	global.client, global.server, global.inspector = nil, nil, nil
 	global.mu.Unlock()
 
 	registry.mu.Lock()
@@ -89,6 +91,11 @@ func Shutdown(context.Context) error {
 	var errs []error
 	if server != nil {
 		server.Shutdown()
+	}
+	if inspector != nil {
+		if err := inspector.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if client != nil {
 		if err := client.Close(); err != nil {

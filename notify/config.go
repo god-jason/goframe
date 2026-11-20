@@ -11,7 +11,8 @@ import (
 type Config struct {
 	// Enabled 控制是否启用通知组件。
 	Enabled bool `yaml:"enabled"`
-	// Channel 是发送通道：smtp / webhook。
+	// Channel 是发送通道：smtp / webhook / sms。
+	// sms 通道使用各云厂商包（cloud/aliyun 等）注册的服务商，任一成功即返回。
 	Channel string `yaml:"channel"`
 	// Queue 是任务队列启用时投递的队列名。
 	Queue string `yaml:"queue"`
@@ -59,7 +60,9 @@ func (c Config) buildSender() (Sender, error) {
 		return NewSMTP(c.SMTP)
 	case "webhook":
 		return NewWebhook(c.Webhook)
+	case "sms":
+		return NewSMS(registryProvider{}), nil
 	default:
-		return nil, fmt.Errorf("notify: unknown channel %q (want smtp or webhook)", c.Channel)
+		return nil, fmt.Errorf("notify: unknown channel %q (want smtp, webhook or sms)", c.Channel)
 	}
 }

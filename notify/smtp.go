@@ -21,12 +21,12 @@ const (
 // SMTPConfig 是 SMTP 发送配置。
 // TLS 为 true 时要求服务器支持 STARTTLS；为 false 时服务器支持则仍会升级。
 type SMTPConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	From     string `mapstructure:"from"`
-	TLS      bool   `mapstructure:"tls"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
+	TLS      bool   `yaml:"tls"`
 }
 
 // SMTPSender 是基于 net/smtp 的邮件发送器。

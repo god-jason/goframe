@@ -119,7 +119,9 @@ notify:
   # 统一通知；taskqueue 启用时 notify.Send 入队异步发送并自动重试，
   # 队列未启用时回退为同步直发
   enabled: false
-  # 发送通道：smtp / webhook
+  # 发送通道：smtp / webhook / sms
+  # sms 通道由下方 aliyun / tencent / huawei 段的 sms 服务自动注册，
+  # 支持多家同时启用（故障转移）；metadata 参数要求见各 cloud 包文档
   channel: smtp
   # 投递的队列名，必须存在于 taskqueue.queues
   queue: notify
@@ -260,6 +262,126 @@ storage:
   secret_key: ${S3_SECRET_KEY}
   use_ssl: true
   secure: true
+
+aliyun:
+  # 阿里云集成（官方 SDK）；需业务 main 显式导入
+  # github.com/god-jason/goframe/cloud/aliyun 才会注册 boot 模块
+  enabled: false
+  access_key_id: ${ALIYUN_ACCESS_KEY_ID}
+  access_key_secret: ${ALIYUN_ACCESS_KEY_SECRET}
+  region: cn-hangzhou
+  timeout: 10s
+  sms:
+    # 短信服务 dysmsapi；启用后自动注册为 notify 的 sms 服务商
+    enabled: false
+    sign_name: ""
+    # 留空使用 dysmsapi.{region}.aliyuncs.com
+    endpoint: ""
+  voice:
+    # 语音通知 dyvmsapi
+    enabled: false
+    # 被叫显号（已在控制台报备的主叫号码）
+    called_show_number: ""
+    endpoint: ""
+  storage:
+    # 对象存储 OSS
+    enabled: false
+    endpoint: ""
+    bucket: ""
+
+tencent:
+  # 腾讯云集成（官方 SDK）；需显式导入 github.com/god-jason/goframe/cloud/tencent
+  enabled: false
+  secret_id: ${TENCENT_SECRET_ID}
+  secret_key: ${TENCENT_SECRET_KEY}
+  region: ap-guangzhou
+  timeout: 10s
+  sms:
+    # 短信服务 SMS；启用后自动注册为 notify 的 sms 服务商
+    enabled: false
+    sdk_app_id: ""
+    sign_name: ""
+  voice:
+    # 语音通知 VMS
+    enabled: false
+    sdk_app_id: ""
+    # 语音播放次数，0 使用默认值 1
+    play_times: 1
+  storage:
+    # 对象存储 COS；bucket 格式为 name-appid
+    enabled: false
+    bucket: ""
+    # 留空复用顶层 region
+    region: ""
+    # 留空使用 https://{bucket}.cos.{region}.myqcloud.com
+    endpoint: ""
+
+huawei:
+  # 华为云集成（官方 SDK）；需显式导入 github.com/god-jason/goframe/cloud/huawei
+  enabled: false
+  access_key_id: ${HUAWEI_ACCESS_KEY_ID}
+  secret_access_key: ${HUAWEI_SECRET_ACCESS_KEY}
+  # 区域级项目 ID（短信与语音必填）
+  project_id: ${HUAWEI_PROJECT_ID}
+  # 短信与语音仅支持 cn-north-4 / cn-south-1
+  region: cn-north-4
+  timeout: 10s
+  sms:
+    # 短信服务 SMS；启用后自动注册为 notify 的 sms 服务商
+    enabled: false
+    signature: ""
+    # 显示源号码（控制台申请的发送方号码）
+    from: ""
+  voice:
+    # 语音通话 VCP 1.0
+    enabled: false
+    # 主叫显示号码（已购买的虚拟号码）
+    show_number: ""
+    play_times: 1
+    country_code: CN
+    # 留空使用 https://vcp.{region}.myhuaweicloud.com
+    endpoint: ""
+  storage:
+    # 对象存储 OBS
+    enabled: false
+    endpoint: ""
+    bucket: ""
+
+onenet:
+  # 中国移动 OneNET 物联网开放平台短信能力（REST API）；
+  # 需显式导入 github.com/god-jason/goframe/cloud/onenet 才会注册 boot 模块
+  enabled: false
+  # 短信能力平台的 SI 唯一标识（开通后获得）
+  sicode: ${ONENET_SICODE}
+  # 留空使用 http://api.sms.heclouds.com
+  endpoint: ""
+  timeout: 10s
+  sms:
+    # 模板签名短信；启用后自动注册为 notify 的 sms 服务商
+    enabled: false
+    # 默认签名 ID（创建签名并审核通过后获得）
+    sign_id: ""
+
+ctyun:
+  # 天翼云（中国电信）集成；需显式导入 github.com/god-jason/goframe/cloud/ctyun
+  enabled: false
+  access_key_id: ${CTYUN_ACCESS_KEY_ID}
+  secret_access_key: ${CTYUN_SECRET_ACCESS_KEY}
+  timeout: 10s
+  sms:
+    # 云通信短信（EOP AK/SK 签名）；启用后自动注册为 notify 的 sms 服务商
+    enabled: false
+    sign_name: ""
+    # 留空使用 https://sms-global.ctapi.ctyun.cn/sms/api/v1
+    endpoint: ""
+  storage:
+    # 对象存储 ZOS（S3 兼容协议）
+    enabled: false
+    # ZOS 接入域名 host[:port]，可含 scheme；如 eos-region1.ctyun.cn
+    endpoint: ""
+    bucket: ""
+    # 是否以 HTTPS 访问 ZOS，默认 true
+    use_ssl: true
 
 pprof:
   # 在 Web 引擎上注册 pprof 路由（github.com/gin-contrib/pprof），默认关闭

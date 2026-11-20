@@ -32,6 +32,7 @@ import (
 	_ "github.com/god-jason/goframe/security/csrf"
 	_ "github.com/god-jason/goframe/security/ratelimit"
 	_ "github.com/god-jason/goframe/storage"
+	_ "github.com/god-jason/goframe/trace"
 	_ "github.com/god-jason/goframe/upload"
 	_ "github.com/god-jason/goframe/web"
 	_ "github.com/god-jason/goframe/websocket"

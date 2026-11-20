@@ -4,7 +4,52 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 )
+
+// smsRegistry 保存各云厂商包在 boot 启动时注册的短信服务商，支持多厂商故障切换。
+var smsRegistry = struct {
+	mu   sync.RWMutex
+	list []Provider
+}{}
+
+// AddSMSProvider 注册一个全局短信服务商，供 channel=sms 的通知使用。
+// 由 cloud/aliyun、cloud/tencent、cloud/huawei 等厂商包在启动时调用。
+func AddSMSProvider(p Provider) {
+	if p == nil {
+		return
+	}
+	smsRegistry.mu.Lock()
+	smsRegistry.list = append(smsRegistry.list, p)
+	smsRegistry.mu.Unlock()
+}
+
+// SMSProviders 返回当前已注册短信服务商的快照。
+func SMSProviders() []Provider {
+	smsRegistry.mu.RLock()
+	defer smsRegistry.mu.RUnlock()
+	list := make([]Provider, len(smsRegistry.list))
+	copy(list, smsRegistry.list)
+	return list
+}
+
+// ClearSMSProviders 清空短信服务商注册表，主要用于测试。
+func ClearSMSProviders() {
+	smsRegistry.mu.Lock()
+	smsRegistry.list = nil
+	smsRegistry.mu.Unlock()
+}
+
+// registryProvider 在发送时动态读取注册表，使厂商注册与 boot 启动顺序解耦。
+type registryProvider struct{}
+
+func (registryProvider) Send(ctx context.Context, to []string, content string, params map[string]string) error {
+	list := SMSProviders()
+	if len(list) == 0 {
+		return fmt.Errorf("notify: no sms provider registered (enable a cloud sms section)")
+	}
+	return NewMulti(list...).Send(ctx, to, content, params)
+}
 
 // Provider 是短信服务商适配接口，由具体厂商实现，包本身不绑定厂商。
 type Provider interface {
