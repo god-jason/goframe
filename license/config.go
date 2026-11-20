@@ -1,4 +1,4 @@
-﻿package license
+package license
 
 import (
 	"time"

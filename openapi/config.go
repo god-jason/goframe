@@ -1,4 +1,4 @@
-﻿// Package openapi 提供 Swagger UI 文档页面注册。
+// Package openapi 提供 Swagger UI 文档页面注册。
 //
 // 业务需要先通过 swag 生成文档并在启动入口匿名导入生成的 docs 包：
 //

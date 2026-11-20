@@ -248,3 +248,81 @@ func TestManagerChannelAccessors(t *testing.T) {
 		t.Fatal("nil manager must return nil channel")
 	}
 }
+
+// TestValidateGuards 覆盖下单与退款公共校验的必填项分支。
+func TestValidateGuards(t *testing.T) {
+	if err := validateOrder(Order{Amount: 1, Subject: "s", Scene: SceneNative}); err == nil {
+		t.Fatal("empty out_trade_no must fail")
+	}
+	if err := validateOrder(Order{OutTradeNo: "o", Amount: 1, Scene: SceneNative}); err == nil {
+		t.Fatal("empty subject must fail")
+	}
+	if err := validateOrder(Order{OutTradeNo: "o", Amount: 1, Subject: "s"}); err == nil {
+		t.Fatal("empty scene must fail")
+	}
+	if err := validateRefund(RefundRequest{OutRefundNo: "r", RefundAmount: 1, TotalAmount: 1}); err == nil {
+		t.Fatal("empty out_trade_no must fail")
+	}
+	if err := validateRefund(RefundRequest{OutRefundNo: "r", OutTradeNo: "o", TotalAmount: 1}); err == nil {
+		t.Fatal("zero refund amount must fail")
+	}
+	if err := validateRefund(RefundRequest{OutRefundNo: "r", OutTradeNo: "o", RefundAmount: 1}); err == nil {
+		t.Fatal("zero total amount must fail")
+	}
+}
+
+// TestOnNotifyNoHandlers 空处理器列表应直接返回，不注册任何内容。
+func TestOnNotifyNoHandlers(t *testing.T) {
+	clearHandlers()
+	t.Cleanup(clearHandlers)
+	OnNotify(ChannelWechat)
+	if len(handlersFor(ChannelWechat)) != 0 {
+		t.Fatal("OnNotify without handlers must not register anything")
+	}
+}
+
+// errUnlockLocker 解锁时报错的锁，覆盖 dispatch 的解锁失败日志分支。
+type errUnlockLocker struct{}
+
+func (errUnlockLocker) TryLock(context.Context, string, time.Duration) (lock.UnlockFunc, error) {
+	return func(context.Context) error { return errors.New("unlock failed") }, nil
+}
+
+func (errUnlockLocker) Lock(ctx context.Context, key string, ttl time.Duration) (lock.UnlockFunc, error) {
+	return errUnlockLocker{}.TryLock(ctx, key, ttl)
+}
+
+// setErrStore 包装内存缓存，仅 Set 报错，覆盖 done 标记失败日志分支。
+type setErrStore struct{ *memStore }
+
+func (s setErrStore) Set(context.Context, string, any, time.Duration) error {
+	return errors.New("set failed")
+}
+
+// TestDispatchFailureBranches 覆盖解锁失败与 done 标记失败两个日志分支。
+func TestDispatchFailureBranches(t *testing.T) {
+	clearHandlers()
+	t.Cleanup(clearHandlers)
+	OnNotify(ChannelWechat, func(context.Context, *NotifyResult) error { return nil })
+
+	// 解锁失败：处理仍然成功。
+	m := newTestManager(&fakeChannel{name: ChannelWechat, result: paymentResult()}, newMemStore())
+	m.locker = errUnlockLocker{}
+	if _, err := m.HandleNotify(context.Background(), ChannelWechat, httptest.NewRequest(http.MethodPost, "/", nil)); err != nil {
+		t.Fatalf("unlock error must not fail dispatch: %v", err)
+	}
+
+	// Set 失败：done 标记失败仅记日志，处理成功。
+	m2 := newTestManager(&fakeChannel{name: ChannelWechat, result: paymentResult()}, setErrStore{newMemStore()})
+	if _, err := m2.HandleNotify(context.Background(), ChannelWechat, httptest.NewRequest(http.MethodPost, "/", nil)); err != nil {
+		t.Fatalf("set error must not fail dispatch: %v", err)
+	}
+}
+
+// TestHandleNotifyChannelNotEnabled 未启用渠道时回调直接报 NotFound。
+func TestHandleNotifyChannelNotEnabled(t *testing.T) {
+	m := newTestManager(&fakeChannel{name: ChannelAlipay, result: paymentResult()}, newMemStore())
+	if _, err := m.HandleNotify(context.Background(), ChannelWechat, httptest.NewRequest(http.MethodPost, "/", nil)); err == nil {
+		t.Fatal("disabled channel must return error")
+	}
+}

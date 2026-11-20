@@ -1,4 +1,4 @@
-﻿package ratelimit
+package ratelimit
 
 // Config 是限流配置。
 type Config struct {

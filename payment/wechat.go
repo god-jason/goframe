@@ -295,9 +295,12 @@ func (w *wechatChannel) Refund(ctx context.Context, req RefundRequest) (*RefundR
 	defer cancel()
 
 	notifyURL := strings.TrimSpace(req.NotifyURL)
+	// Currency 是 SDK MarshalJSON 必填校验字段，境内退款仅支持人民币，缺失会导致退款请求在本地序列化阶段必然失败。
+	currency := "CNY"
 	amount := &refunddomestic.AmountReq{
-		Refund: &req.RefundAmount,
-		Total:  &req.TotalAmount,
+		Refund:   &req.RefundAmount,
+		Total:    &req.TotalAmount,
+		Currency: &currency,
 	}
 	create := refunddomestic.CreateRequest{
 		OutTradeNo:  &req.OutTradeNo,

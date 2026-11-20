@@ -1,4 +1,4 @@
-﻿// Package oidc 提供基于 OpenID Connect 的授权码登录与 ID Token 校验能力。
+// Package oidc 提供基于 OpenID Connect 的授权码登录与 ID Token 校验能力。
 package oidc
 
 import (

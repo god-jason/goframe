@@ -1,4 +1,4 @@
-﻿package storage
+package storage
 
 // Config 是文件存储配置。
 // local 驱动使用 Path/BaseURL，s3/minio 驱动使用 Endpoint/Bucket/Region/凭证。

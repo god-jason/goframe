@@ -1,4 +1,4 @@
-﻿package permission
+package permission
 
 // Policy 是 RBAC 角色权限策略。
 type Policy struct {

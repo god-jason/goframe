@@ -1,4 +1,4 @@
-﻿// Package weixin 提供微信公众号与微信小程序的鉴权、登录与消息校验能力。
+// Package weixin 提供微信公众号与微信小程序的鉴权、登录与消息校验能力。
 //
 // 支持多应用配置：公众号 OAuth2 登录、JS-SDK 签名、服务端消息签名与 AES 解密；
 // 小程序 code2Session、手机号获取与加密数据解密。AccessToken/Ticket 自动缓存与刷新。

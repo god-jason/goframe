@@ -1,4 +1,4 @@
-﻿// Package sysinfo 提供 CPU、内存、磁盘占用的实时采集与 HTTP 接口。
+// Package sysinfo 提供 CPU、内存、磁盘占用的实时采集与 HTTP 接口。
 //
 // 数据在请求时即时采集，不落盘、不保留历史，适合运维面板与临时排障。
 package sysinfo

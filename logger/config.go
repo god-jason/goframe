@@ -1,4 +1,4 @@
-﻿package logger
+package logger
 
 // RotationConfig 是日志滚动配置，单独定义在 logger 包内。
 type RotationConfig struct {

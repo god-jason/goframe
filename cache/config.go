@@ -1,4 +1,4 @@
-﻿package cache
+package cache
 
 // Config 是缓存配置：启用 Redis 时使用 Redis，否则使用进程内缓存。
 type Config struct {

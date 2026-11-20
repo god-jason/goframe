@@ -1,4 +1,4 @@
-﻿// Package trace 提供基于 OpenTelemetry 的链路追踪能力。
+// Package trace 提供基于 OpenTelemetry 的链路追踪能力。
 package trace
 
 import "time"

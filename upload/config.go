@@ -1,4 +1,4 @@
-﻿package upload
+package upload
 
 import "github.com/god-jason/goframe/config"
 

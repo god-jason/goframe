@@ -1,4 +1,4 @@
-﻿package csrf
+package csrf
 
 import "time"
 

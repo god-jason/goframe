@@ -140,10 +140,11 @@ func TestDoTransportErrorExhausted(t *testing.T) {
 }
 
 func TestDoRetryWaitContextExpires(t *testing.T) {
+	// 重试等待窗口远大于 ctx 超时，保证 wait 一定在 ctx.Done 分支返回，测试不依赖随机时序。
 	client := New(Options{
 		MaxRetries:   2,
-		RetryWaitMin: 200 * time.Millisecond,
-		RetryWaitMax: 200 * time.Millisecond,
+		RetryWaitMin: time.Minute,
+		RetryWaitMax: time.Minute,
 		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return nil, errors.New("down")
 		}),
@@ -362,5 +363,71 @@ func TestJSONDoError(t *testing.T) {
 	})
 	if err := client.GetJSON(context.Background(), "http://example.com", nil); err == nil {
 		t.Fatal("expected request error")
+	}
+}
+
+func TestBreakerAllowUnknownState(t *testing.T) {
+	breaker := NewBreaker(BreakerOptions{})
+	breaker.state = State(99)
+	if breaker.Allow() {
+		t.Fatal("unknown state must not allow requests")
+	}
+}
+
+func TestReplayRequestNotReplayable(t *testing.T) {
+	req, _ := http.NewRequest(http.MethodPut, "http://example.com", nil)
+	req.Body = io.NopCloser(strings.NewReader("x"))
+	req.GetBody = nil
+	if _, err := replayRequest(req); err == nil || !strings.Contains(err.Error(), "not replayable") {
+		t.Fatalf("err = %v, want not replayable", err)
+	}
+}
+
+func TestBackoffZeroRetryWaitMin(t *testing.T) {
+	// 绕过 withDefaults 直接构造零等待配置，验证 backoff 返回 0 而不是随机值。
+	client := &Client{opts: Options{}}
+	for retry := 1; retry <= 3; retry++ {
+		if got := client.backoff(retry); got != 0 {
+			t.Fatalf("backoff(%d) = %v, want 0", retry, got)
+		}
+	}
+}
+
+func TestWaitReturnsContextErrorDuringTimer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// 等待时长大于 0 时走 select 分支，ctx 已取消应立即返回其错误。
+	if err := wait(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Fatalf("wait = %v, want context.Canceled", err)
+	}
+}
+
+func TestRecordResultSuccessResetsBreaker(t *testing.T) {
+	breaker := NewBreaker(BreakerOptions{FailureThreshold: 2})
+	breaker.Failure()
+	New(Options{}).recordResult(breaker, http.StatusOK)
+	if breaker.State() != StateClosed || breaker.failures != 0 {
+		t.Fatalf("state = %s, failures = %d, want closed/0", breaker.State(), breaker.failures)
+	}
+}
+
+func TestDrainNilBody(t *testing.T) {
+	drain(nil)
+	drain(io.NopCloser(strings.NewReader("payload")))
+}
+
+func TestPostJSONNilContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		_, _ = io.WriteString(w, string(data))
+	}))
+	defer server.Close()
+
+	var out map[string]string
+	if err := New(Options{}).PostJSON(nil, server.URL, map[string]string{"k": "v"}, &out); err != nil {
+		t.Fatalf("PostJSON: %v", err)
+	}
+	if out["k"] != "v" {
+		t.Fatalf("out = %+v", out)
 	}
 }

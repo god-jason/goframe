@@ -19,7 +19,6 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 
-	"github.com/god-jason/goframe/accesslog"
 	"github.com/god-jason/goframe/api"
 	"github.com/god-jason/goframe/boot"
 	"github.com/god-jason/goframe/cache"
@@ -269,7 +268,6 @@ func setupMiddleware(engine *gin.Engine, cfg Config) {
 	handlers = append(handlers,
 		methodFilter(cfg.Request.AllowedMethods),
 		requestLimits(cfg.Request),
-		accesslog.Middleware(logger.Get(), "/health", "/health/live", "/health/ready", "/metrics"),
 	)
 	engine.Use(handlers...)
 }

@@ -44,10 +44,21 @@ func TestValidate(t *testing.T) {
 	if err := wechat.Validate(); err != nil {
 		t.Fatalf("complete wechat config must pass: %v", err)
 	}
-	missing := wechat
-	missing.Wechat.APIv3Key = ""
-	if err := missing.Validate(); err == nil {
-		t.Fatal("wechat config without apiv3 key must fail")
+	for _, field := range []struct {
+		name  string
+		mutate func(*WechatConfig)
+	}{
+		{"app_id", func(c *WechatConfig) { c.AppID = "" }},
+		{"mch_id", func(c *WechatConfig) { c.MchID = "" }},
+		{"serial_no", func(c *WechatConfig) { c.SerialNo = "" }},
+		{"private_key", func(c *WechatConfig) { c.PrivateKey = "" }},
+		{"apiv3_key", func(c *WechatConfig) { c.APIv3Key = "" }},
+	} {
+		missing := wechat
+		field.mutate(&missing.Wechat)
+		if err := missing.Validate(); err == nil {
+			t.Fatalf("wechat config without %s must fail", field.name)
+		}
 	}
 
 	alipayNormal := Config{Enabled: true, Alipay: AlipayConfig{
@@ -56,10 +67,19 @@ func TestValidate(t *testing.T) {
 	if err := alipayNormal.Validate(); err != nil {
 		t.Fatalf("complete alipay config must pass: %v", err)
 	}
-	missingPub := alipayNormal
-	missingPub.Alipay.PublicKey = ""
-	if err := missingPub.Validate(); err == nil {
-		t.Fatal("alipay normal mode without public key must fail")
+	for _, field := range []struct {
+		name   string
+		mutate func(*AlipayConfig)
+	}{
+		{"app_id", func(c *AlipayConfig) { c.AppID = "" }},
+		{"private_key", func(c *AlipayConfig) { c.PrivateKey = "" }},
+		{"public_key", func(c *AlipayConfig) { c.PublicKey = "" }},
+	} {
+		missing := alipayNormal
+		field.mutate(&missing.Alipay)
+		if err := missing.Validate(); err == nil {
+			t.Fatalf("alipay normal mode without %s must fail", field.name)
+		}
 	}
 
 	alipayCert := Config{Enabled: true, Alipay: AlipayConfig{
@@ -69,10 +89,19 @@ func TestValidate(t *testing.T) {
 	if err := alipayCert.Validate(); err != nil {
 		t.Fatalf("alipay cert mode must pass: %v", err)
 	}
-	missingCert := alipayCert
-	missingCert.Alipay.RootCertFile = ""
-	if err := missingCert.Validate(); err == nil {
-		t.Fatal("alipay cert mode without root cert must fail")
+	for _, field := range []struct {
+		name   string
+		mutate func(*AlipayConfig)
+	}{
+		{"app_cert_file", func(c *AlipayConfig) { c.AppCertFile = "" }},
+		{"alipay_cert_file", func(c *AlipayConfig) { c.AlipayCertFile = "" }},
+		{"root_cert_file", func(c *AlipayConfig) { c.RootCertFile = "" }},
+	} {
+		missingCert := alipayCert
+		field.mutate(&missingCert.Alipay)
+		if err := missingCert.Validate(); err == nil {
+			t.Fatalf("alipay cert mode without %s must fail", field.name)
+		}
 	}
 	if !alipayCert.Alipay.certMode() || alipayNormal.Alipay.certMode() {
 		t.Fatal("certMode detection incorrect")

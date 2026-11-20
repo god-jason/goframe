@@ -81,7 +81,6 @@ goframe/
 ├── config/         # 配置段注册、加载、环境变量覆盖、热更新
 ├── web/            # HTTP Server、TLS、Gin 引擎装配、全局中间件链、请求限制、健康检查、指标、pprof
 ├── api/            # 接口注册与挂载、统一响应、分页、路由分组、SPA 托管、认证/租户/权限守卫（原 response、router 包已并入）
-├── accesslog/      # 访问日志中间件（状态码、耗时、RequestID、身份、trace）
 ├── idempotency/    # 基于 Idempotency-Key 的 HTTP 幂等中间件与记录存储
 ├── errors/         # 稳定错误码与 AppError
 ├── auth/           # Identity、JWT、API Key、TOTP、Session/RefreshToken、GORM 仓库、OIDC
@@ -1537,7 +1536,7 @@ trace:
 ```
 
 - `trace.Middleware()` 已内置到全局中间件，自动解析/生成 traceparent 并回写 `X-Trace-ID`。
-- 访问日志自动携带 `trace_id`；出站请求使用 `httpclient` 或 `trace.HTTPTransport` 即可传递链路。
+- 出站请求使用 `httpclient` 或 `trace.HTTPTransport` 即可传递链路。
 
 **OpenAPI 文档（swaggo）**
 

@@ -21,10 +21,12 @@ type ExecuteCallBody struct {
 }
 
 // ExecuteCallResponse 是 VCP 1.0 语音呼叫响应。
+// HttpStatusCode 由华为云 SDK 反序列化时通过反射回填，字段缺失会导致 2xx 响应 panic。
 type ExecuteCallResponse struct {
-	StatusCode int    `json:"statusCode,omitempty"`
-	Message    string `json:"message,omitempty"`
-	CallID     string `json:"callId,omitempty"`
+	HttpStatusCode int    `json:"-"`
+	StatusCode     int    `json:"statusCode,omitempty"`
+	Message        string `json:"message,omitempty"`
+	CallID         string `json:"callId,omitempty"`
 }
 
 // executeCallRequest 承载请求体字段，字段名与 API 定义中的 Body 对应。
@@ -34,9 +36,8 @@ type executeCallRequest struct {
 
 // Voice 是华为云语音通话（VCP）客户端。
 type Voice struct {
-	hc     *httpclient.HcHttpClient
-	reqDef *def.HttpRequestDef
-	cfg    Config
+	hc  *httpclient.HcHttpClient
+	cfg Config
 }
 
 // NewVoice 按配置创建 VCP 语音客户端。
@@ -53,14 +54,7 @@ func NewVoice(cfg Config) (*Voice, error) {
 	if err != nil {
 		return nil, fmt.Errorf("huawei: create vcp client: %w", err)
 	}
-	reqDef := def.NewHttpRequestDefBuilder().
-		WithMethod(http.MethodPost).
-		WithPath("/vcp/executeCall").
-		WithContentType("application/json").
-		WithRequestField(def.NewFieldDef().WithName("Body").WithLocationType(def.Body)).
-		WithResponse(new(ExecuteCallResponse)).
-		Build()
-	return &Voice{hc: hc, reqDef: reqDef, cfg: cfg}, nil
+	return &Voice{hc: hc, cfg: cfg}, nil
 }
 
 // Call 使用文本转语音向被叫号码发起语音呼叫，返回通话任务 ID。
@@ -83,7 +77,16 @@ func (v *Voice) Call(ctx context.Context, callee, message string) (string, error
 		PlayTimes:   playTimes,
 		CountryCode: v.cfg.Voice.CountryCode,
 	}
-	resp, err := v.hc.Sync(&executeCallRequest{Body: body}, v.reqDef)
+	// 每次调用构造独立请求定义：SDK 会把响应反序列化进 WithResponse 的共享实例，
+	// 复用 reqDef 会导致并发调用数据竞争。
+	reqDef := def.NewHttpRequestDefBuilder().
+		WithMethod(http.MethodPost).
+		WithPath("/vcp/executeCall").
+		WithContentType("application/json").
+		WithRequestField(def.NewFieldDef().WithName("Body").WithLocationType(def.Body)).
+		WithResponse(new(ExecuteCallResponse)).
+		Build()
+	resp, err := v.hc.Sync(&executeCallRequest{Body: body}, reqDef)
 	if err != nil {
 		return "", fmt.Errorf("huawei: voice call: %w", err)
 	}
