@@ -22,10 +22,34 @@ func newHealthEngine(checker *Checker) *gin.Engine {
 	api.Reset()
 	checker.Register()
 	engine := gin.New()
-	if err := api.MountRoot(engine); err != nil {
+	// 单元测试直接验证处理器，跳过管理员守卫。
+	if err := api.MountRoot(engine, api.WithGuard(api.Admin)); err != nil {
 		panic(err)
 	}
 	return engine
+}
+
+// TestHealthRouteAccess 验证聚合检查仅管理员可访问，存活/就绪探针保持公开。
+func TestHealthRouteAccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	api.Reset()
+	defer api.Reset()
+
+	New("v1").Register()
+	engine := gin.New()
+	if err := api.MountRoot(engine); err != nil {
+		t.Fatalf("MountRoot: %v", err)
+	}
+
+	if code := perform(engine, "/health").Code; code != http.StatusUnauthorized {
+		t.Fatalf("/health status = %d, want 401", code)
+	}
+	if code := perform(engine, "/health/live").Code; code != http.StatusOK {
+		t.Fatalf("/health/live status = %d, want 200", code)
+	}
+	if code := perform(engine, "/health/ready").Code; code != http.StatusServiceUnavailable {
+		t.Fatalf("/health/ready status = %d, want 503", code)
+	}
 }
 
 func perform(engine *gin.Engine, path string) *httptest.ResponseRecorder {

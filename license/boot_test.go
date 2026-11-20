@@ -318,11 +318,33 @@ func TestLoadPublicKeyAndRevocation(t *testing.T) {
 	}
 }
 
+// TestLicenseStatusRequiresAdmin 验证许可状态接口默认拒绝匿名访问。
+func TestLicenseStatusRequiresAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	withLicenseConfig(t, Config{Enabled: true, StatusPath: "/license"})
+
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	global.manager = newTestManager(t, now, IssueOptions{ID: "L-admin", Product: "goframe", IssuedAt: now}, nil)
+	t.Cleanup(func() { global.manager = nil })
+
+	api.Reset()
+	defer api.Reset()
+	Register()
+	engine := gin.New()
+	if err := api.MountRoot(engine); err != nil {
+		t.Fatalf("mount root: %v", err)
+	}
+	if code := getStatus(engine, "/license"); code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", code)
+	}
+}
+
 func TestHTTPRegisterAndRequireValid(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mount := func() *gin.Engine {
 		engine := gin.New()
-		if err := api.MountRoot(engine); err != nil {
+		// 单元测试直接验证处理器，跳过管理员守卫。
+		if err := api.MountRoot(engine, api.WithGuard(api.Admin)); err != nil {
 			t.Fatalf("mount root: %v", err)
 		}
 		return engine

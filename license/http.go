@@ -11,13 +11,13 @@ import (
 )
 
 // Register 把许可状态查询接口登记为框架根路径接口，由 web 启动时统一挂载。
-// 未启用或路径为空时不做任何登记。
+// 许可状态包含客户与授权信息，仅管理员可访问；未启用或路径为空时不做任何登记。
 func Register() {
 	cfg := GetConfig()
 	if !cfg.Enabled || strings.TrimSpace(cfg.StatusPath) == "" {
 		return
 	}
-	api.RegisterRoot(http.MethodGet, resolvePath(cfg.StatusPath), statusHandler())
+	api.RegisterRootAdmin(http.MethodGet, resolvePath(cfg.StatusPath), statusHandler())
 }
 
 // RequireValid 要求当前许可有效（含宽限期）。

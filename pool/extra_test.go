@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"os"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -94,11 +95,11 @@ func TestTaskErrorReportedWithoutHandler(t *testing.T) {
 }
 
 func TestErrorHandlerPanicIsIsolated(t *testing.T) {
-	var calls int
+	var calls atomic.Int64
 	p := New(Options{
 		Workers:   1,
 		QueueSize: 2,
-		OnError:   func(error) { calls++; panic("handler boom") },
+		OnError:   func(error) { calls.Add(1); panic("handler boom") },
 	})
 	if err := p.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -123,7 +124,7 @@ func TestErrorHandlerPanicIsIsolated(t *testing.T) {
 	}
 	waitFor(t, "error handler called", func() bool {
 		p.Stats()
-		return calls == 1
+		return calls.Load() == 1
 	})
 
 	// panic 后 worker 仍可继续处理任务。

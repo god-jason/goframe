@@ -30,7 +30,7 @@
 - **配置管理**：配置结构体分散在各包并自动注册，默认值 → 配置文件 → `GOFRAME_*` 环境变量，`${VAR}` 展开，原子热更新与日志等级热更新。
 - **HTTP 层**：标准库 `http.Server` + Gin，超时、可信代理、请求体与 Query 限制、统一错误响应、分页与排序白名单。
 - **认证与授权**：JWT（HS256 白名单、iss/aud/exp/nbf/iat 校验）、刷新令牌轮换与重放检测、会话管理、Argon2id 密码哈希、RBAC + 租户/资源授权。
-- **安全基础设施**：安全响应头、CORS、CSRF、限流、审计、AES-256-GCM 加密、输入清洗、密钥提供者。
+- **安全基础设施**：CORS（gin-contrib/cors，默认关闭）、CSRF、限流、审计、AES-256-GCM 加密、输入清洗、密钥提供者。
 - **文件与图片**：安全上传（大小、扩展名、MIME/Magic Number、路径隔离）、图片等比缩放/裁剪/缩略图/重新编码。
 - **Excel 导入导出**：XLSX 读写、XLS（BIFF8 读取 / SpreadsheetML 导出）、多工作表、表头冻结、筛选、列宽、斑马纹。
 - **PDF 生成**：标题、段落、表格、图片、页眉页脚、页码、自动分页与表头重复。
@@ -44,14 +44,14 @@
 
 ## 快速开始
 
-环境要求：Go 1.24+。
+环境要求：Go 1.26+（以 go.mod 为准）。
 
 ```bash
 # 启动示例服务（默认 :8080，内存会话 + 内存缓存，不依赖数据库）
 go run ./example
 
-# 探活
-curl http://localhost:8080/health
+# 探活（公开探针）
+curl http://localhost:8080/health/live
 
 # 公开接口
 curl http://localhost:8080/api/v1/public/ping
@@ -182,7 +182,7 @@ iot-platform/
 |---|---|---|
 | Web 框架 | Gin | 已使用 |
 | ORM | GORM v2 | 已使用 |
-| 配置管理 | Viper | 已使用 |
+| 配置管理 | yaml.v3 + fsnotify（自研配置段） | 已使用 |
 | 日志 | Zap | 已使用 |
 | 参数校验 | go-playground/validator | 通过 Gin Binding 使用 |
 | JWT | golang-jwt/jwt/v5 | 已使用 |
@@ -388,6 +388,7 @@ pool:
 - `shutdown_timeout`、`max_header_bytes`。
 - `trusted_proxies`：只有可信代理才能提供真实客户端 IP。
 - `api_prefix` / `api_version`。
+- `cors`：跨域白名单、方法、请求头、凭证与预检缓存，默认关闭。
 
 ### 路由分组
 
@@ -467,9 +468,11 @@ column, direction := query.SortClause(map[string]string{
 全局链路：
 
 ```text
-gin.Recovery → Trace → CSRF → Global Rate Limit → Method Filter → Request Limits
-→ Access Log → Metrics → 业务路由
+gin.Recovery → CORS（可选） → Trace → CSRF → Global Rate Limit → Method Filter → Request Limits
 ```
+
+- CORS 仅在 `server.cors.enabled` 为 true 时加入链路，并先于限流与方法过滤处理预检请求。
+- 框架不内置 Access Log 与 HTTP 请求指标中间件；如需采集请求数、耗时与在途请求，可在业务入口挂载 `web.Metrics().Middleware()`。
 
 认证、租户、权限中间件由业务模块按分组挂载：
 
@@ -481,10 +484,10 @@ protected := api.Group("",
 )
 ```
 
-- Access Log 在请求完成后记录状态码、耗时和 RequestID（客户端携带 `X-Request-ID` 时记录该值）。
+- 框架不生成 RequestID，`api.RequestID` 读取客户端 `X-Request-ID`；需要服务端生成时由业务中间件调用 `c.Set(api.RequestIDKey, id)`。
 - 登录接口应在认证之前单独限流，示例模块已按 IP 配置登录限流。
 - CSRF 仅对携带 CSRF Cookie 且未使用 Bearer Token 的非安全方法生效。
-- 与 gin/gin-contrib 重复的中间件（RequestID、Recovery、Gzip、Timeout、Security Headers、CORS）已从框架移除，框架不引入 gin-contrib 依赖；业务可按需自行接入对应 gin-contrib 中间件。
+- 框架不内置 Access Log、RequestID、Gzip、Timeout、Security Headers 等通用中间件；CORS 使用 `github.com/gin-contrib/cors`，通过 `server.cors` 配置。其他中间件业务可按需自行接入。
 
 ## 认证与授权
 
@@ -654,7 +657,7 @@ _ = runner.Register(migrations...)
 
 | 模块 | 主要职责 |
 |---|---|
-| HTTP Security | Header、CORS、CSRF、请求限制 |
+| HTTP Security | CORS、CSRF、请求限制 |
 | Authentication | JWT、Session、Refresh Token |
 | Authorization | RBAC、资源授权 |
 | Input Security | 参数校验、SQL 注入、XSS |
@@ -667,19 +670,15 @@ _ = runner.Register(migrations...)
 
 ### HTTP 安全
 
-默认安全响应头：
+CORS 由 `server.cors` 配置，默认关闭，启用后使用 `github.com/gin-contrib/cors`：
 
-```text
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: camera=(), microphone=(), geolocation=()
-```
-
-- HSTS 仅在确认 HTTPS 部署后启用。
-- CSP 应根据实际 SPA 的 CDN、API、字体和脚本来源配置，建议先使用 Report-Only。
-- 生产环境禁止任意 Origin；Cookie credentials 模式不允许通配 Origin。
+- 必须显式列出 `allowed_origins`，支持精确 Origin 或 `"*"`。
+- `allow_credentials: true` 时不允许 `"*"`。
+- 预检请求由 CORS 中间件在限流与业务路由之前处理。
 - CORS 不作为身份认证和资源授权机制。
+
+框架不内置安全响应头（`X-Content-Type-Options`、`X-Frame-Options`、CSP、HSTS 等），推荐在反向代理/网关注入，或由业务自行挂载中间件。
+
 - 使用 `http.MaxBytesReader` 限制 Body，限制 Query 长度和 HTTP 方法。
 - JSON API 可要求 `Content-Type: application/json`。
 
@@ -844,7 +843,7 @@ func GetConfig() *Config { return cfg.Get() }
 
 ```yaml
 app:        # 名称、版本、环境
-server:     # 监听地址、超时、可信代理、API 前缀与版本、请求限制（request 子段）
+server:     # 监听地址、超时、可信代理、API 前缀与版本、请求限制（request 子段）、CORS（cors 子段）
 tls:        # none / file / acme
 database:   # driver、DSN、连接池
 redis:      # 缓存开关与连接
@@ -1292,12 +1291,15 @@ stats := hub.Stats()
 提供：
 
 ```text
-GET /health
-GET /health/live
-GET /health/ready
-GET /metrics
+GET /health/live     # 公开
+GET /health/ready    # 公开
+GET /health          # 管理员
+GET /metrics         # 管理员
+GET /system/...      # 管理员（sysinfo 启用时）
+GET /license         # 管理员（license 启用时）
 ```
 
+- 管理员指已登录且通过 `permission` 的 `admin` 授权；未启用 `security.auth` 时这些端点返回 401（默认拒绝）。
 - `live`：进程是否存活。
 - `ready`：服务是否可以正常接收请求，未就绪或关键依赖异常返回 503。
 - `health`：聚合检查所有依赖，关键依赖失败返回 503。
@@ -1311,7 +1313,13 @@ Prometheus 指标：
 - `goframe_http_requests_in_flight`
 - Go runtime 与进程指标
 
-Metrics 和健康检查接口不得无保护地暴露到公网；建议通过内网、网关或访问控制限制。
+其中 HTTP 请求指标由 `monitor.Metrics.Middleware()` 采集，框架不会自动挂载；`/metrics` 默认只输出 Go runtime 与进程指标。需要请求指标时在业务入口注册：
+
+```go
+web.Engine().Use(web.Metrics().Middleware())
+```
+
+`/metrics` 与聚合健康检查默认要求管理员身份，Prometheus 抓取时需携带认证信息；如仅在内网暴露，应在网关或网络策略层再做一次限制。
 
 ### 性能分析（pprof）
 
@@ -1354,10 +1362,10 @@ sysinfo:
 ```
 
 ```text
-GET /system           # 完整快照（主机、CPU、内存、磁盘）
-GET /system/cpu       # CPU 总使用率、每核使用率、核心数、负载
-GET /system/memory    # 物理内存与 Swap
-GET /system/disk      # 各分区容量、使用率与 inode
+GET /system           # 完整快照（主机、CPU、内存、磁盘，管理员）
+GET /system/cpu       # CPU 总使用率、每核使用率、核心数、负载（管理员）
+GET /system/memory    # 物理内存与 Swap（管理员）
+GET /system/disk      # 各分区容量、使用率与 inode（管理员）
 ```
 
 - 返回结构与统一响应一致，数据在 `data` 字段中。
@@ -1461,10 +1469,10 @@ if license.Get().WithinLimit("users", currentUsers) {
 ```
 
 ```text
-GET /license   # 状态、有效期、功能与配额快照
+GET /license   # 状态、有效期、功能与配额快照（管理员）
 ```
 
-许可状态查询接口会暴露客户与授权信息，生产环境应通过认证中间件或网关限制访问。
+许可状态查询接口会暴露客户与授权信息，框架默认按管理员接口挂载（登录 + `admin` 授权），未启用认证时返回 401。
 
 ### 微信鉴权（weixin）
 
@@ -1551,6 +1559,8 @@ openapi:
   enabled: true
   path: /swagger
 ```
+
+Swagger UI 以公开根路径挂载；生产环境应保持关闭，或仅在管理网络内开启，并通过网关/访问控制限制访问。
 
 **对象存储与文件扫描**
 
@@ -1658,7 +1668,7 @@ _ = sms.SendSms(ctx, &cloud.SmsRequest{
 **HTTP 客户端与中间件**
 
 - `httpclient.New(httpclient.Options{...})` 内置超时、重试、熔断与 JSON 辅助。
-- `idempotency.Middleware(store, ttl)` 提供 HTTP 幂等；gzip、超时、RequestID、安全 Header、CORS 等与 gin-contrib 重复的中间件已从框架移除，业务可自行接入 gin-contrib 对应实现。
+- `idempotency.Middleware(store, ttl)` 提供 HTTP 幂等；gzip、超时、RequestID、安全 Header 等通用中间件需业务自行接入 gin-contrib 对应实现，CORS 由框架内置的 `server.cors` 提供。
 
 **DNS-01 与密钥管理**
 

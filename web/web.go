@@ -159,7 +159,8 @@ func Startup(ctx context.Context) error {
 	checker.Register()
 
 	metrics := monitor.NewMetrics()
-	api.RegisterRoot(http.MethodGet, "/metrics", metrics.Handler())
+	// 指标包含运行时与进程信息，仅管理员可访问。
+	api.RegisterRootAdmin(http.MethodGet, "/metrics", metrics.Handler())
 
 	if pprofConfig := PProf(); pprofConfig.Enabled {
 		pprof.Register(engine, pprofConfig.Path)
@@ -256,9 +257,13 @@ func Run(ctx context.Context) error {
 }
 
 func setupMiddleware(engine *gin.Engine, cfg Config) {
-	handlers := make([]gin.HandlerFunc, 0, 8)
+	handlers := make([]gin.HandlerFunc, 0, 9)
+	handlers = append(handlers, gin.Recovery())
+	// CORS 需要先于限流与方法过滤处理预检请求。
+	if corsHandler := corsMiddleware(cfg.CORS); corsHandler != nil {
+		handlers = append(handlers, corsHandler)
+	}
 	handlers = append(handlers,
-		gin.Recovery(),
 		trace.Middleware(),
 		csrf.Middleware(csrf.Get()),
 	)

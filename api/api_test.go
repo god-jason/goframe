@@ -29,6 +29,27 @@ func serve(engine *gin.Engine, method, path string) int {
 	return rec.Code
 }
 
+// TestRegisterRootAdminAppliesAdminGuard 验证框架管理员根接口会附加管理员守卫。
+func TestRegisterRootAdminAppliesAdminGuard(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	Reset()
+	defer Reset()
+
+	var order []string
+	RegisterRootAdmin(http.MethodGet, "/system", marker(&order, "system", http.StatusOK))
+
+	engine := gin.New()
+	if err := MountRoot(engine, WithGuard(Admin, guardMarker(&order, "admin-guard"))); err != nil {
+		t.Fatalf("MountRoot: %v", err)
+	}
+	if code := serve(engine, http.MethodGet, "/system"); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	if strings.Join(order, ",") != "admin-guard,system" {
+		t.Fatalf("order = %v", order)
+	}
+}
+
 func TestMountAppliesGuardsPerAccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	Reset()

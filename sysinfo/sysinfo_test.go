@@ -34,14 +34,33 @@ func testConfig() Config {
 }
 
 // mountTestEngine 把当前注册表中的框架根路径接口挂载到新引擎。
+// 单元测试直接验证处理器，跳过管理员守卫。
 func mountTestEngine(t *testing.T) *gin.Engine {
 	t.Helper()
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	if err := api.MountRoot(engine, api.WithGuard(api.Admin)); err != nil {
+		t.Fatalf("mount root: %v", err)
+	}
+	return engine
+}
+
+// TestSystemInfoRequiresAdmin 验证系统信息接口默认拒绝匿名访问。
+func TestSystemInfoRequiresAdmin(t *testing.T) {
+	api.Reset()
+	defer api.Reset()
+	register(testConfig())
+
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	if err := api.MountRoot(engine); err != nil {
 		t.Fatalf("mount root: %v", err)
 	}
-	return engine
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/system", nil))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", recorder.Code)
+	}
 }
 
 func TestRegisterDisabled(t *testing.T) {

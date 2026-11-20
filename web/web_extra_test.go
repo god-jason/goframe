@@ -80,11 +80,20 @@ func TestStartupDefaultAndGetters(t *testing.T) {
 		t.Fatal("addr must not be empty before listen")
 	}
 
-	for _, target := range []string{"/health", "/health/live", "/metrics"} {
+	// 存活/就绪探针保持公开；就绪探针未就绪时返回 503。
+	for _, target := range []string{"/health/live", "/health/ready"} {
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("%s status = %d", target, recorder.Code)
+		if recorder.Code == http.StatusUnauthorized {
+			t.Fatalf("%s must be public, got 401", target)
+		}
+	}
+	// 聚合健康检查与指标默认要求管理员身份。
+	for _, target := range []string{"/health", "/metrics"} {
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("%s status = %d, want 401", target, recorder.Code)
 		}
 	}
 

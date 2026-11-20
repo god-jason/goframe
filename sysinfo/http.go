@@ -24,19 +24,19 @@ func register(cfg Config) {
 	}
 	path := resolvePath(cfg.Path)
 
-	api.RegisterRoot(http.MethodGet, path, collectHandler(cfg, func(ctx context.Context) (any, error) {
+	api.RegisterRootAdmin(http.MethodGet, path, collectHandler(cfg, func(ctx context.Context) (any, error) {
 		return snapshot(ctx, cfg)
 	}))
-	api.RegisterRoot(http.MethodGet, path+"/", collectHandler(cfg, func(ctx context.Context) (any, error) {
+	api.RegisterRootAdmin(http.MethodGet, path+"/", collectHandler(cfg, func(ctx context.Context) (any, error) {
 		return snapshot(ctx, cfg)
 	}))
-	api.RegisterRoot(http.MethodGet, path+"/cpu", collectHandler(cfg, func(ctx context.Context) (any, error) {
+	api.RegisterRootAdmin(http.MethodGet, path+"/cpu", collectHandler(cfg, func(ctx context.Context) (any, error) {
 		return cpuSnapshot(ctx, cfg)
 	}))
-	api.RegisterRoot(http.MethodGet, path+"/memory", collectHandler(cfg, func(ctx context.Context) (any, error) {
+	api.RegisterRootAdmin(http.MethodGet, path+"/memory", collectHandler(cfg, func(ctx context.Context) (any, error) {
 		return memorySnapshot(ctx)
 	}))
-	api.RegisterRoot(http.MethodGet, path+"/disk", collectHandler(cfg, func(ctx context.Context) (any, error) {
+	api.RegisterRootAdmin(http.MethodGet, path+"/disk", collectHandler(cfg, func(ctx context.Context) (any, error) {
 		return diskSnapshot(ctx)
 	}))
 }

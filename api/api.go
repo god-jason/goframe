@@ -38,9 +38,9 @@ const (
 
 // API 是一条已登记的接口。
 type API struct {
-	Access   Access
-	Method   string
-	Path     string
+	Access Access
+	Method string
+	Path   string
 	// Root 为 true 表示框架根路径接口，由 MountRoot 挂到引擎根路径，
 	// 不受业务 APIPrefix 影响；否则由 Mount 挂到指定分组。
 	Root     bool
@@ -80,6 +80,18 @@ func RegisterAs(access Access, method, path string, handlers ...gin.HandlerFunc)
 func RegisterRoot(method, path string, handlers ...gin.HandlerFunc) {
 	upsert(&API{
 		Access:   Public,
+		Method:   strings.ToUpper(strings.TrimSpace(method)),
+		Path:     path,
+		Root:     true,
+		Handlers: handlers,
+	})
+}
+
+// RegisterRootAdmin 登记需要管理员权限的框架根路径接口。
+// 挂载时自动附加登录认证与管理员授权守卫，用于指标、系统信息等敏感端点。
+func RegisterRootAdmin(method, path string, handlers ...gin.HandlerFunc) {
+	upsert(&API{
+		Access:   Admin,
 		Method:   strings.ToUpper(strings.TrimSpace(method)),
 		Path:     path,
 		Root:     true,

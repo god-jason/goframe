@@ -17,6 +17,18 @@ type RequestConfig struct {
 	RequireJSONBody bool            `yaml:"require_json_body"`
 }
 
+// CORSConfig 是跨域访问配置，基于 gin-contrib/cors 实现。
+// 默认关闭；启用时必须显式配置允许的 Origin，且允许携带凭证时不允许使用 "*"。
+type CORSConfig struct {
+	Enabled          bool          `yaml:"enabled"`
+	AllowedOrigins   []string      `yaml:"allowed_origins"`
+	AllowedMethods   []string      `yaml:"allowed_methods"`
+	AllowedHeaders   []string      `yaml:"allowed_headers"`
+	ExposedHeaders   []string      `yaml:"exposed_headers"`
+	AllowCredentials bool          `yaml:"allow_credentials"`
+	MaxAge           time.Duration `yaml:"max_age"`
+}
+
 // Config 是 HTTP 服务配置。
 type Config struct {
 	Host              string        `yaml:"host"`
@@ -33,6 +45,8 @@ type Config struct {
 	APIVersion        string        `yaml:"api_version"`
 	// Request 是请求方法白名单与请求体等限制配置。
 	Request RequestConfig `yaml:"request"`
+	// CORS 是跨域访问配置。
+	CORS CORSConfig `yaml:"cors"`
 }
 
 // Addr 返回监听地址。
@@ -65,6 +79,40 @@ func (c Config) Validate() error {
 			return fmt.Errorf("server: invalid trusted proxy %q", proxy)
 		}
 	}
+	return c.CORS.Validate()
+}
+
+// Validate 校验 CORS 配置。
+func (c CORSConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if len(c.AllowedOrigins) == 0 {
+		return fmt.Errorf("server: cors.allowed_origins is required when cors is enabled")
+	}
+	allowAll := false
+	for _, origin := range c.AllowedOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			return fmt.Errorf("server: cors.allowed_origins must not contain empty value")
+		}
+		if origin == "*" {
+			allowAll = true
+			continue
+		}
+		if strings.Contains(origin, "*") {
+			return fmt.Errorf("server: cors origin %q is not supported, use an exact origin", origin)
+		}
+		if !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+			return fmt.Errorf("server: cors origin %q must start with http:// or https://", origin)
+		}
+	}
+	if allowAll && c.AllowCredentials {
+		return fmt.Errorf("server: cors.allowed_origins cannot contain \"*\" when allow_credentials is true")
+	}
+	if c.MaxAge < 0 {
+		return fmt.Errorf("server: cors.max_age must not be negative")
+	}
 	return nil
 }
 
@@ -87,6 +135,15 @@ func DefaultConfig() Config {
 			MaxQueryLength:  4096,
 			AllowedMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 			RequireJSONBody: true,
+		},
+		CORS: CORSConfig{
+			AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			AllowedHeaders: []string{
+				"Origin", "Accept", "Content-Type", "Authorization",
+				"X-Request-ID", "X-API-Key", "X-CSRF-Token", "Idempotency-Key",
+			},
+			ExposedHeaders: []string{"X-Request-ID", "X-Trace-ID"},
+			MaxAge:         12 * time.Hour,
 		},
 	}
 }

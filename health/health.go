@@ -119,8 +119,9 @@ func (c *Checker) SetReady(ready bool) { c.ready.Store(ready) }
 func (c *Checker) IsReady() bool { return c.ready.Load() }
 
 // Register 把健康检查接口登记为框架根路径接口，由 web 启动时统一挂载。
+// 存活/就绪探针保持公开，聚合检查包含依赖错误详情，仅管理员可访问。
 func (c *Checker) Register() {
-	api.RegisterRoot(http.MethodGet, "/health", c.HandleHealth)
+	api.RegisterRootAdmin(http.MethodGet, "/health", c.HandleHealth)
 	api.RegisterRoot(http.MethodGet, "/health/live", c.HandleLive)
 	api.RegisterRoot(http.MethodGet, "/health/ready", c.HandleReady)
 }

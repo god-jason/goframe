@@ -20,9 +20,11 @@
 
 - [ ] TLS：`tls.mode` 三选一——反向代理终止（`none`，代理到源站的流量不可被客户端直连绕过）、加载证书（`file`）、自动签发（`acme`，域名已解析且 80/443 可达，`email` 已填）。
 - [ ] `server.trusted_proxies` 只填写真实代理网段，防止伪造 X-Forwarded-For。
+- [ ] `server.cors` 默认关闭；前后端分离部署时开启并显式列出 `allowed_origins`，`allow_credentials: true` 时禁止使用 `"*"`。
 - [ ] `security.rate_limit.enabled: true`，`global_rate`/`global_burst` 按压测结果设定；`fail_open: false`。
 - [ ] `security.csrf` 在浏览器可达的接口上启用，HTTPS 下 `secure: true`。
 - [ ] `server.request.max_body_size` 与 `security.upload.max_size` 按业务上限收紧；上传启用 `scan_enabled` 时 clamd 可达。
+- [ ] `/metrics`、`/health`、`/system/...`、`/license` 默认要求管理员身份；Prometheus 抓取与运维调用需携带认证信息，或仅在管理员网络内暴露。
 - [ ] `websocket.allowed_origins` 明确列出生产域名，不使用 `*`；关闭 `allow_anonymous` 并注入鉴权。
 - [ ] `pprof.enabled`、`sysinfo.enabled` 默认关闭；确需开启时仅对内网/管理端口暴露。
 
@@ -70,5 +72,5 @@
 
 - [ ] `go build ./... && go vet ./... && go test ./...` 全绿后再打包。
 - [ ] 启动后确认 boot 顺序日志：config → logger → 各组件 Startup 无错误。
-- [ ] 健康检查：业务侧注册 `/healthz` 类路由；K8s 配置 readiness/liveness 探针。
+- [ ] 健康检查：框架内置 `GET /health/live`、`GET /health/ready`（公开）与 `GET /health`（管理员）；K8s 使用 `/health/live`、`/health/ready` 配置存活/就绪探针，`/health` 仅供管理员排障。
 - [ ] 观察首个发布周期：错误日志、`taskqueue` 积压（可用 `taskqueue.InspectQueues` / `ListTasks` 运维接口）、Redis 内存、慢 SQL（`database.slow_threshold`）。

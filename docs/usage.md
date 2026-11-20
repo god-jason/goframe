@@ -280,8 +280,9 @@ return boot.Run(context.Background(), serve)
 
 #### web（HTTP 服务）
 
-- 配置段：`server`（host/port/mode/read_timeout/write_timeout/shutdown_timeout/trusted_proxies/api_prefix/api_version/request.*）、`tls`（证书与 ACME）、`pprof`、`spa`、`openapi`。
+- 配置段：`server`（host/port/mode/read_timeout/write_timeout/shutdown_timeout/trusted_proxies/api_prefix/api_version/request.*/cors.*）、`tls`（证书与 ACME）、`pprof`、`spa`、`openapi`。
 - 启用：匿名导入即注册；`web.Run(ctx)` 在 serve 中阻塞运行 HTTP 服务。
+- 只读端点访问级别：`/health/live`、`/health/ready` 公开；`/health`、`/metrics`、`/system/*`、`/license` 需要登录并通过 `admin` 授权。
 
 ```go
 // 获取引擎与 API 分组
